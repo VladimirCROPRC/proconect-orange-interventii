@@ -72,7 +72,7 @@ function normalizeMediaConverterType(mc: boolean, value: unknown) {
   return mediaConverterTypes.has(type) ? type as ProjectRecord["mcType"] : "";
 }
 
-const orangeTopologies = new Set(["FO BB", "FO Local VHBB"]);
+const orangeTopologies = new Set(["FO BB", "FO Local", "VHBB"]);
 const orangeRouteTypes = new Set(["Aerian", "Subteran", "Mixt"]);
 const orangeInterventionSlas: Record<string, Set<string>> = {
   IMO: new Set(["Y10", "Y8", "Y6"]),
@@ -302,13 +302,10 @@ export async function createProject(input: ProjectRecord, createdBy: Authenticat
   }
   const orangeDetails = normalizeOrangeDetails(input, activityType);
   const required = activityType === "Intervenție Orange"
-    ? [input.client, input.requirements, input.technician, orangeDetails.foSectionName, orangeDetails.topology, orangeDetails.routeType, orangeDetails.orangeInterventionType, orangeDetails.sla, orangeDetails.departureLocality, orangeDetails.county]
+    ? [input.client, input.requirements, input.technician, orangeDetails.foSectionName, orangeDetails.topology, orangeDetails.orangeInterventionType, orangeDetails.sla, orangeDetails.departureLocality, orangeDetails.county]
     : [input.client, input.address, input.contact, input.phone, input.requirements, input.technician, ...(activityType === "Instalare" ? [input.cpe] : [])];
   if (required.some((value) => typeof value !== "string" || !value.trim())) {
     return { error: "Completează toate informațiile obligatorii ale proiectului.", status: 400 as const };
-  }
-  if (activityType === "Intervenție Orange" && (!Number.isInteger(orangeDetails.cableCapacity) || orangeDetails.cableCapacity < 1 || orangeDetails.cableCapacity > 10000)) {
-    return { error: "Introdu o capacitate validă a cablului.", status: 400 as const };
   }
   const existing = await getRawDb().prepare("SELECT id FROM projects WHERE id = ? LIMIT 1").bind(workId).first();
   if (existing) return { error: activityType === "Intervenție" || activityType === "Intervenție Orange" ? "Numărul tichetului există deja. Verifică valoarea introdusă." : "Request ID există deja. Verifică numărul introdus.", status: 409 as const };
@@ -673,6 +670,8 @@ export async function saveFieldDocumentation(projectId: string, section: string,
         incidentDescription?: unknown;
         damageLocation?: { lat?: unknown; lon?: unknown };
         siteMeasurement?: { siteCode?: unknown; otdrLengthMeters?: unknown; photoCount?: unknown };
+        cableCapacity?: unknown;
+        routeType?: unknown;
       };
       execution?: Partial<InterventionExecutionSummary>;
       documentation?: Partial<InterventionDocumentationSummary>;
@@ -695,6 +694,13 @@ export async function saveFieldDocumentation(projectId: string, section: string,
     }
     if (typeof assessment.incidentDescription !== "string" || !assessment.incidentDescription.trim() || assessment.incidentDescription.trim().length > 2_000) {
       return { error: "Completează descrierea incidentului constatat.", status: 400 as const };
+    }
+    const assessedCableCapacity = Number(assessment.cableCapacity);
+    if (!Number.isInteger(assessedCableCapacity) || assessedCableCapacity < 1 || assessedCableCapacity > 10000) {
+      return { error: "Introdu capacitatea cablului constatată în teren.", status: 400 as const };
+    }
+    if (typeof assessment.routeType !== "string" || !orangeRouteTypes.has(assessment.routeType)) {
+      return { error: "Selectează tipul traseului constatat în teren.", status: 400 as const };
     }
 
     const photos = await getRawDb()
