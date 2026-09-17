@@ -1,6 +1,7 @@
 import { getAuthorizedProject, isManagementRole, readReport, writeReport } from "../../project-server";
 import { syncReportIfConnected } from "../../backup-server";
 import { currentSession, sameOrigin } from "../../server-auth";
+import { buildOrangeKmz } from "../../orange-kmz";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +12,9 @@ export async function GET(request: Request) {
     if (!isManagementRole(session.account)) return Response.json({ error: "Acces rezervat administratorului." }, { status: 403 });
     const projectId = new URL(request.url).searchParams.get("projectId");
     if (!projectId || !(await getAuthorizedProject(projectId, session.account))) return Response.json({ error: "Proiect indisponibil." }, { status: 404 });
+    if (new URL(request.url).searchParams.get("format") === "kmz") {
+      return new Response(await buildOrangeKmz(projectId), { headers: { "Content-Type": "application/vnd.google-earth.kmz", "Content-Disposition": `attachment; filename="${projectId}.kmz"` } });
+    }
     return Response.json({ saved: await readReport(projectId) }, { headers: { "Cache-Control": "no-store" } });
   } catch {
     return Response.json({ error: "Raportul nu este disponibil momentan." }, { status: 503 });

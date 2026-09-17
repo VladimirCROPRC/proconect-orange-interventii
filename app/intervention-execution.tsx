@@ -191,6 +191,7 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
   const [previewJunction, setPreviewJunction] = useState<DraftJunction | null>(null);
   const [activities, setActivities] = useState<InterventionExecutionActivity[]>(initialSummary?.execution?.activities ?? []);
   const [materials, setMaterials] = useState<InterventionMaterialSelection[]>(initialSummary?.execution?.materials ?? []);
+  const [remediationDescription, setRemediationDescription] = useState(initialSummary?.execution?.remediationDescription ?? "");
   const [materialSource, setMaterialSource] = useState<"orange" | "proconect">("orange");
   const [materialCode, setMaterialCode] = useState("");
   const [materialQuantity, setMaterialQuantity] = useState("");
@@ -246,6 +247,7 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
       if (!mounted) return;
       setActivities(initialSummary?.execution?.activities ?? []);
       setMaterials(initialSummary?.execution?.materials ?? []);
+      setRemediationDescription(initialSummary?.execution?.remediationDescription ?? "");
       setDraft(null);
       setPreviewJunction(null);
       setPhotos([]);
@@ -545,13 +547,29 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
     setError("");
     try {
       const nextActivities = [...activities, record];
-      await onSaved({ ...initialSummary, execution: { activities: nextActivities, materials, documentedAt } });
+      await onSaved({ ...initialSummary, execution: { activities: nextActivities, materials, remediationDescription, documentedAt } });
       setActivities(nextActivities);
       setDraft(null);
       setMode("pan");
       onNotify(`${activityCatalog[record.type].title} a fost salvată pentru tichetul ${project.id}.`);
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : "Activitatea nu a putut fi salvată.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveRemediationDescription() {
+    if (!remediationDescription.trim()) {
+      onNotify("Descrie acțiunile întreprinse pentru remediere.");
+      return;
+    }
+    setSaving(true);
+    try {
+      await onSaved({ ...initialSummary, execution: { activities, materials, remediationDescription: remediationDescription.trim(), documentedAt: Date.now() } });
+      onNotify("Descrierea remedierii a fost salvată.");
+    } catch (failure) {
+      onNotify(failure instanceof Error ? failure.message : "Descrierea remedierii nu a putut fi salvată.");
     } finally {
       setSaving(false);
     }
@@ -738,7 +756,15 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
       </aside>
     </div>
 
-    {blankMap && <section className="project-card intervention-records-card">
+    <section className="project-card intervention-records-card">
+      <div className="card-heading"><div><h2>Descriere remediere</h2><p>Descrie acțiunile întreprinse în teren pentru eliminarea incidentului.</p></div></div>
+      <div className="intervention-activity-form-body">
+        <label className="intervention-damage-field"><span>Acțiuni întreprinse</span><textarea rows={6} maxLength={2000} value={remediationDescription} onChange={(event) => setRemediationDescription(event.target.value)} placeholder="Descrie operațiunile de remediere" /></label>
+        <button type="button" className="primary-button" onClick={() => void saveRemediationDescription()} disabled={saving || !remediationDescription.trim()}>{saving ? "Se salvează…" : "Salvează descrierea"}</button>
+      </div>
+    </section>
+
+    {blankMap && false && <section className="project-card intervention-records-card">
       <div className="card-heading"><div><h2>Materiale utilizate</h2><p>Alege materialele Orange și materialele Proconect consumate la intervenție.</p></div></div>
       <div className="intervention-activity-form-body">
         <div className="intervention-route-toolbar"><button type="button" className={materialSource === "orange" ? "active" : ""} onClick={() => { setMaterialSource("orange"); setMaterialCode(""); }}>Materiale Orange</button><button type="button" className={materialSource === "proconect" ? "active" : ""} onClick={() => { setMaterialSource("proconect"); setMaterialCode(""); }}>Materiale Proconect</button></div>

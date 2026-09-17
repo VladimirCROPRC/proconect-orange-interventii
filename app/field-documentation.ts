@@ -108,6 +108,8 @@ export type InterventionCause =
 export type InterventionAssessmentSummary = {
   damageType: InterventionDamageType;
   cause?: InterventionCause;
+  arrivedAt?: number;
+  incidentDescription?: string;
   damageLocation?: { lat: number; lon: number; placedAt?: number };
   siteMeasurement?: {
     siteCode: string;
@@ -158,11 +160,20 @@ export type InterventionMaterialSelection = {
 export type InterventionExecutionSummary = {
   activities: InterventionExecutionActivity[];
   materials?: InterventionMaterialSelection[];
+  remediationDescription?: string;
   documentedAt: number;
+};
+
+export type InterventionServiceSelection = {
+  code: string;
+  quantity: number;
 };
 
 export type InterventionDocumentationSummary = {
   report: string;
+  incidentDescription?: string;
+  remediationDescription?: string;
+  services?: InterventionServiceSelection[];
   validatedAt: number;
   validatedBy: string;
 };

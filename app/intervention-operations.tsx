@@ -4,7 +4,9 @@ import { useEffect, useState, type FormEvent } from "react";
 import { deleteProjectFile, fetchProjectFiles, formatCapturedAt, uploadProjectFile, type StoredProjectFile } from "./client-storage";
 import { InterventionExecutionSection } from "./intervention-execution";
 import { DamageLocationPicker } from "./damage-location-picker";
-import type { InterventionCause, InterventionDamageType, InterventionExecutionActivity, InterventionFieldSummary } from "./field-documentation";
+import { orangeMaterials, proconectMaterials } from "./orange-materials";
+import { orangeServicePackages } from "./orange-services";
+import type { InterventionCause, InterventionDamageType, InterventionExecutionActivity, InterventionFieldSummary, InterventionMaterialSelection } from "./field-documentation";
 import type { ProjectRecord } from "./project-data";
 
 type InterventionSection = "assessment" | "execution" | "documentation";
@@ -141,6 +143,8 @@ export function InterventionOperationsSection({
 }: InterventionOperationsProps) {
   const [damageType, setDamageType] = useState<InterventionDamageType | "">(initialSummary?.assessment?.damageType ?? "");
   const [cause, setCause] = useState<InterventionCause | "">(initialSummary?.assessment?.cause ?? "");
+  const [arrivedAt, setArrivedAt] = useState(initialSummary?.assessment?.arrivedAt);
+  const [incidentDescription, setIncidentDescription] = useState(initialSummary?.assessment?.incidentDescription ?? "");
   const [damageLocation, setDamageLocation] = useState(initialSummary?.assessment?.damageLocation);
   const [siteMeasurementEnabled, setSiteMeasurementEnabled] = useState(Boolean(initialSummary?.assessment?.siteMeasurement));
   const [siteMeasurementCode, setSiteMeasurementCode] = useState(initialSummary?.assessment?.siteMeasurement?.siteCode ?? "");
@@ -152,6 +156,12 @@ export function InterventionOperationsSection({
   const [removingId, setRemovingId] = useState("");
   const [error, setError] = useState("");
   const [report, setReport] = useState(() => initialSummary?.documentation?.report ?? buildInterventionReport(project, initialSummary));
+  const [reviewIncident, setReviewIncident] = useState(initialSummary?.documentation?.incidentDescription ?? initialSummary?.assessment?.incidentDescription ?? "");
+  const [reviewRemediation, setReviewRemediation] = useState(initialSummary?.documentation?.remediationDescription ?? initialSummary?.execution?.remediationDescription ?? "");
+  const [reviewMaterials, setReviewMaterials] = useState<InterventionMaterialSelection[]>(initialSummary?.execution?.materials ?? []);
+  const [reviewMaterialKey, setReviewMaterialKey] = useState("");
+  const [reviewMaterialQuantity, setReviewMaterialQuantity] = useState("");
+  const [serviceCode, setServiceCode] = useState(initialSummary?.documentation?.services?.[0]?.code ?? "");
 
   useEffect(() => {
     let mounted = true;
@@ -159,6 +169,8 @@ export function InterventionOperationsSection({
       if (!mounted) return;
       setDamageType(initialSummary?.assessment?.damageType ?? "");
       setCause(initialSummary?.assessment?.cause ?? "");
+      setArrivedAt(initialSummary?.assessment?.arrivedAt);
+      setIncidentDescription(initialSummary?.assessment?.incidentDescription ?? "");
       setDamageLocation(initialSummary?.assessment?.damageLocation);
       setSiteMeasurementEnabled(Boolean(initialSummary?.assessment?.siteMeasurement));
       setSiteMeasurementCode(initialSummary?.assessment?.siteMeasurement?.siteCode ?? "");
@@ -188,6 +200,10 @@ export function InterventionOperationsSection({
     let mounted = true;
     queueMicrotask(() => {
       if (mounted) setReport(initialSummary?.documentation?.report ?? buildInterventionReport(project, initialSummary));
+      if (mounted) setReviewIncident(initialSummary?.documentation?.incidentDescription ?? initialSummary?.assessment?.incidentDescription ?? "");
+      if (mounted) setReviewRemediation(initialSummary?.documentation?.remediationDescription ?? initialSummary?.execution?.remediationDescription ?? "");
+      if (mounted) setReviewMaterials(initialSummary?.execution?.materials ?? []);
+      if (mounted) setServiceCode(initialSummary?.documentation?.services?.[0]?.code ?? "");
     });
     return () => {
       mounted = false;
@@ -205,7 +221,7 @@ export function InterventionOperationsSection({
   const orangeIntervention = project.activityType === "Intervenție Orange";
   const completedItems = Number(Boolean(damageType)) + Number(validPhotos.length > 0) + Number(!orangeIntervention || Boolean(damageLocation)) + Number(!orangeIntervention || Boolean(cause));
   const progress = Math.round((completedItems / (orangeIntervention ? 4 : 2)) * 100);
-  const ready = Boolean(damageType) && validPhotos.length > 0 && siteMeasurementReady && (!orangeIntervention || (Boolean(cause) && Boolean(damageLocation)));
+  const ready = Boolean(damageType) && Boolean(arrivedAt) && Boolean(incidentDescription.trim()) && validPhotos.length > 0 && siteMeasurementReady && (!orangeIntervention || (Boolean(cause) && Boolean(damageLocation)));
   const executionActivities = initialSummary?.execution?.activities ?? [];
   const totalExecutionPhotos = executionActivities.reduce((total, activity) => total + activity.photoCount, 0);
   const totalCableMeters = executionActivities.reduce((total, activity) => total + (activity.type === "fo-installation" ? activity.cableLengthMeters ?? 0 : 0), 0);
@@ -257,7 +273,7 @@ export function InterventionOperationsSection({
 
   async function saveAssessment(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!damageType || !validPhotos.length || !siteMeasurementReady || (orangeIntervention && (!cause || !damageLocation))) {
+    if (!damageType || !arrivedAt || !incidentDescription.trim() || !validPhotos.length || !siteMeasurementReady || (orangeIntervention && (!cause || !damageLocation))) {
       setError(!siteMeasurementReady
         ? "Completează codul site-ului, lungimea OTDR și fotografia măsurătorii cu GPS valid."
         : orangeIntervention ? "Selectează tipul și cauza avariei, amplasează locația pe hartă și adaugă cel puțin o fotografie cu GPS valid." : "Selectează tipul avariei și adaugă cel puțin o fotografie cu GPS valid.");
@@ -272,6 +288,8 @@ export function InterventionOperationsSection({
         assessment: {
           damageType,
           ...(cause ? { cause } : {}),
+          ...(arrivedAt ? { arrivedAt } : {}),
+          incidentDescription: incidentDescription.trim(),
           ...(damageLocation ? { damageLocation } : {}),
           ...(siteMeasurementEnabled ? { siteMeasurement: {
             siteCode: siteMeasurementCode.trim().toLocaleUpperCase("ro-RO"),
@@ -302,8 +320,12 @@ export function InterventionOperationsSection({
     try {
       await onSaved({
         ...initialSummary,
+        execution: initialSummary.execution ? { ...initialSummary.execution, materials: reviewMaterials } : initialSummary.execution,
         documentation: {
           report: report.trim(),
+          incidentDescription: reviewIncident.trim(),
+          remediationDescription: reviewRemediation.trim(),
+          services: serviceCode ? [{ code: serviceCode, quantity: 1 }] : [],
           validatedAt: 0,
           validatedBy: "",
         },
@@ -314,6 +336,31 @@ export function InterventionOperationsSection({
     } finally {
       setSaving(false);
     }
+  }
+
+  function addReviewedMaterial() {
+    const [source, code] = reviewMaterialKey.split(":") as ["orange" | "proconect", string];
+    const catalog = source === "orange" ? orangeMaterials : proconectMaterials;
+    const item = catalog.find((entry) => entry.code === code);
+    const quantity = Number(reviewMaterialQuantity.replace(",", "."));
+    if (!item || !Number.isFinite(quantity) || quantity <= 0) return;
+    setReviewMaterials((current) => [...current.filter((entry) => !(entry.source === source && entry.code === code)), { source, code, description: item.description, unit: item.unit, quantity }]);
+    setReviewMaterialKey("");
+    setReviewMaterialQuantity("");
+  }
+
+  async function downloadKmz() {
+    const response = await fetch(`/api/reports?${new URLSearchParams({ projectId: project.id, format: "kmz" })}`, { credentials: "same-origin" });
+    if (!response.ok) {
+      onNotify("Fișierul KMZ nu a putut fi generat.");
+      return;
+    }
+    const url = URL.createObjectURL(await response.blob());
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${project.id}.kmz`;
+    link.click();
+    URL.revokeObjectURL(url);
   }
 
   return (
@@ -365,6 +412,13 @@ export function InterventionOperationsSection({
             <div className="card-heading"><div><h2>Constatare avarie</h2><p>Identifică avaria și documentează situația găsită în teren.</p></div></div>
 
             <div className="intervention-assessment-content">
+              <div style={{ order: -3 }}>
+                <button className="primary-button" type="button" disabled={Boolean(arrivedAt)} onClick={() => {
+                  const timestamp = Date.now();
+                  setArrivedAt(timestamp);
+                  onNotify("Ora sosirii în zona avariei a fost înregistrată. Salvează constatarea pentru confirmare.");
+                }}>{arrivedAt ? `Ajuns în zonă · ${formatCapturedAt(arrivedAt)}` : "Am ajuns în zona avariei"}</button>
+              </div>
               <label className="intervention-damage-field">
                 <span>Tipul avariei <b>OBLIGATORIU</b></span>
                 <select value={damageType} onChange={(event) => setDamageType(event.target.value as InterventionDamageType | "")} required>
@@ -430,7 +484,7 @@ export function InterventionOperationsSection({
                 </article>)}
               </div>}
 
-              <label className="intervention-damage-field">
+              <div className="intervention-site-measurement" style={{ order: -2 }}><label className="intervention-damage-field">
                 <span>Măsurătoare site <b>DACĂ ESTE CAZUL</b></span>
                 <select value={siteMeasurementEnabled ? "yes" : "no"} onChange={(event) => setSiteMeasurementEnabled(event.target.value === "yes")}>
                   <option value="no">Nu este cazul</option>
@@ -470,6 +524,13 @@ export function InterventionOperationsSection({
                   </article>)}
                 </div>}
               </>}
+              </div>
+
+              <label className="intervention-damage-field">
+                <span>Descriere incident <b>OBLIGATORIU</b></span>
+                <textarea value={incidentDescription} maxLength={2000} rows={5} onChange={(event) => setIncidentDescription(event.target.value)} placeholder="Descrie situația constatată în teren" required />
+                <small>Coordonatorul va putea verifica și edita acest text înainte de validarea QAF.</small>
+              </label>
 
               {error && <p className="intervention-error" role="alert">{error}</p>}
             </div>
@@ -519,6 +580,18 @@ export function InterventionOperationsSection({
                 aria-label="Raportul intervenției"
               />
               <p className="intervention-report-counter">{report.trim().length.toLocaleString("ro-RO")} / 5.000 caractere</p>
+
+              <label className="intervention-damage-field"><span>Descriere incident validată</span><textarea rows={5} maxLength={2000} value={reviewIncident} onChange={(event) => setReviewIncident(event.target.value)} /></label>
+              <label className="intervention-damage-field"><span>Descriere remediere validată</span><textarea rows={5} maxLength={2000} value={reviewRemediation} onChange={(event) => setReviewRemediation(event.target.value)} /></label>
+
+              <div className="card-heading"><div><h2>Materiale validate</h2><p>Coordonatorul poate corecta lista înainte de generarea QAF.</p></div></div>
+              <label className="intervention-damage-field"><span>Material</span><select value={reviewMaterialKey} onChange={(event) => setReviewMaterialKey(event.target.value)}><option value="">Selectează</option><optgroup label="Orange">{orangeMaterials.map((item) => <option key={`orange:${item.code}`} value={`orange:${item.code}`}>{item.code} · {item.description}</option>)}</optgroup><optgroup label="Proconect">{proconectMaterials.map((item) => <option key={`proconect:${item.code}`} value={`proconect:${item.code}`}>{item.code} · {item.description}</option>)}</optgroup></select></label>
+              <label className="intervention-damage-field"><span>Cantitate</span><input type="number" min="0.01" step="0.01" value={reviewMaterialQuantity} onChange={(event) => setReviewMaterialQuantity(event.target.value)} /></label>
+              <button type="button" className="secondary-button" onClick={addReviewedMaterial}>Adaugă / actualizează materialul</button>
+              {reviewMaterials.map((item) => <div className="intervention-records-list" key={`${item.source}:${item.code}`}><article><span>{item.source === "orange" ? "OR" : "PC"}</span><div><strong>{item.code} · {item.description}</strong></div><b>{item.quantity} {item.unit}</b><button type="button" className="record-delete-button" onClick={() => setReviewMaterials((current) => current.filter((entry) => entry !== item))}>Șterge</button></article></div>)}
+
+              <label className="intervention-damage-field"><span>Pachet de servicii QAF</span><select value={serviceCode} onChange={(event) => setServiceCode(event.target.value)}><option value="">Fără pachet selectat</option>{orangeServicePackages.map((service) => <option key={service.code} value={service.code}>{service.code} · {service.description}</option>)}</select></label>
+              <button type="button" className="secondary-button" onClick={() => void downloadKmz()}>Generează KMZ</button>
 
               {executionActivities.length > 0 && <div className="intervention-report-activities">
                 <h3>Operațiuni incluse</h3>

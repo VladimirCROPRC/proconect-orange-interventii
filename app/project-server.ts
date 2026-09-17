@@ -667,6 +667,8 @@ export async function saveFieldDocumentation(projectId: string, section: string,
       assessment?: {
         damageType?: unknown;
         cause?: unknown;
+        arrivedAt?: unknown;
+        incidentDescription?: unknown;
         damageLocation?: { lat?: unknown; lon?: unknown };
         siteMeasurement?: { siteCode?: unknown; otdrLengthMeters?: unknown; photoCount?: unknown };
       };
@@ -685,6 +687,12 @@ export async function saveFieldDocumentation(projectId: string, section: string,
     }
     if (project.activity_type === "Intervenție Orange" && (!assessment.damageLocation || typeof assessment.damageLocation.lat !== "number" || typeof assessment.damageLocation.lon !== "number" || !Number.isFinite(assessment.damageLocation.lat) || !Number.isFinite(assessment.damageLocation.lon))) {
       return { error: "Amplasează locația avariei Orange pe hartă.", status: 400 as const };
+    }
+    if (typeof assessment.arrivedAt !== "number" || !Number.isFinite(assessment.arrivedAt) || assessment.arrivedAt <= 0) {
+      return { error: "Înregistrează sosirea echipei în zona avariei.", status: 400 as const };
+    }
+    if (typeof assessment.incidentDescription !== "string" || !assessment.incidentDescription.trim() || assessment.incidentDescription.trim().length > 2_000) {
+      return { error: "Completează descrierea incidentului constatat.", status: 400 as const };
     }
 
     const photos = await getRawDb()
@@ -786,10 +794,24 @@ export async function saveFieldDocumentation(projectId: string, section: string,
       if (report.length < 20 || report.length > 5_000) {
         return { error: "Raportul intervenției trebuie să conțină între 20 și 5.000 de caractere.", status: 400 as const };
       }
+      const incidentDescription = typeof intervention.documentation.incidentDescription === "string" ? intervention.documentation.incidentDescription.trim() : "";
+      const remediationDescription = typeof intervention.documentation.remediationDescription === "string" ? intervention.documentation.remediationDescription.trim() : "";
+      if (!incidentDescription || !remediationDescription || incidentDescription.length > 2_000 || remediationDescription.length > 2_000) {
+        return { error: "Validează descrierea incidentului și descrierea remedierii.", status: 400 as const };
+      }
+      const services = intervention.documentation.services ?? [];
+      const serviceCodes = new Set(["SP1 FO", "SP2 FOA", "SP3 FOA", "CR4 FOA", "SP5 FOU", "CR6 FOU", "CR7 FOU"]);
+      if (!Array.isArray(services) || services.length > 1 || services.some((service) => !serviceCodes.has(String(service.code)) || Number(service.quantity) !== 1)) {
+        return { error: "Pachetul de servicii selectat nu este valid.", status: 400 as const };
+      }
       content = {
         ...intervention,
         documentation: {
+          ...intervention.documentation,
           report,
+          incidentDescription,
+          remediationDescription,
+          services,
           validatedAt: Date.now(),
           validatedBy: account.name,
         } satisfies InterventionDocumentationSummary,

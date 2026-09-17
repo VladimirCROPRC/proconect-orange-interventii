@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 import { getRawDb } from "../db";
 import { orangeMaterials, proconectMaterials } from "./orange-materials";
+import { orangeServicePackages } from "./orange-services";
 import { zipPackage } from "./report-docx";
 
 type AssetEnvironment = { ASSETS?: { fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> } };
@@ -74,13 +75,19 @@ async function orangeDocumentation(projectId: string) {
   let damageLocation: DamageLocation | undefined;
   let documentedAt: number | undefined;
   let siteMeasurement: SiteMeasurement | undefined;
+  let arrivedAt: number | undefined;
+  let incidentDescription = "";
+  let remediationDescription = "";
+  let validatedAt: number | undefined;
+  let services: Array<{ code?: string; quantity?: number }> = [];
   let cause = "";
   if (row.content_json) {
     try {
       const documentation = JSON.parse(row.content_json) as {
         intervention?: {
-          assessment?: { cause?: string; damageLocation?: DamageLocation; documentedAt?: number; siteMeasurement?: SiteMeasurement };
-          execution?: { materials?: Material[]; activities?: ExecutionActivity[] };
+          assessment?: { cause?: string; arrivedAt?: number; incidentDescription?: string; damageLocation?: DamageLocation; documentedAt?: number; siteMeasurement?: SiteMeasurement };
+          execution?: { materials?: Material[]; activities?: ExecutionActivity[]; remediationDescription?: string };
+          documentation?: { incidentDescription?: string; remediationDescription?: string; services?: Array<{ code?: string; quantity?: number }>; validatedAt?: number };
         };
       };
       materials = Array.isArray(documentation.intervention?.execution?.materials) ? documentation.intervention!.execution!.materials! : [];
@@ -88,6 +95,11 @@ async function orangeDocumentation(projectId: string) {
       damageLocation = documentation.intervention?.assessment?.damageLocation;
       documentedAt = documentation.intervention?.assessment?.documentedAt;
       siteMeasurement = documentation.intervention?.assessment?.siteMeasurement;
+      arrivedAt = documentation.intervention?.assessment?.arrivedAt;
+      incidentDescription = documentation.intervention?.documentation?.incidentDescription ?? documentation.intervention?.assessment?.incidentDescription ?? "";
+      remediationDescription = documentation.intervention?.documentation?.remediationDescription ?? documentation.intervention?.execution?.remediationDescription ?? "";
+      validatedAt = documentation.intervention?.documentation?.validatedAt;
+      services = Array.isArray(documentation.intervention?.documentation?.services) ? documentation.intervention!.documentation!.services! : [];
       cause = documentation.intervention?.assessment?.cause ?? "";
     } catch {
       // The ticket data remains usable even if older field documentation is malformed.
@@ -99,7 +111,7 @@ async function orangeDocumentation(projectId: string) {
     ).bind(projectId).all<{ original_name: string }>()
     : { results: [] as Array<{ original_name: string }> };
   return {
-    materials, damageLocation, documentedAt, cause, siteMeasurement,
+    materials, damageLocation, documentedAt, cause, siteMeasurement, arrivedAt, incidentDescription, remediationDescription, validatedAt, services,
     measurementPhotoNames: (measurementPhotos.results ?? []).map((photo) => photo.original_name).filter(Boolean),
     newJunctions: activities
       .filter((activity) => activity.type === "junction-installation" && activity.junction?.kind === "new")
@@ -185,15 +197,27 @@ export async function buildOrangeQafXlsx(projectId: string) {
     });
     entry.content = encoder.encode(xml);
   }
+  const servicesSheet = files.find((file) => file.name === "xl/worksheets/sheet4.xml");
+  if (!servicesSheet) throw new Error("Șablonul QAF Orange nu conține foaia de servicii.");
+  let servicesXml = decoder.decode(servicesSheet.content);
+  for (const selection of documentation.services) {
+    const service = orangeServicePackages.find((item) => item.code === selection.code);
+    const quantity = Number(selection.quantity);
+    if (service && Number.isFinite(quantity) && quantity > 0) servicesXml = writeQuantity(servicesXml, `E${service.qafRow}`, quantity);
+  }
+  servicesSheet.content = encoder.encode(servicesXml);
   const main = files.find((file) => file.name === "xl/worksheets/sheet1.xml");
   if (!main) throw new Error("Șablonul QAF Orange nu conține foaia principală.");
   const location = documentation.damageLocation;
-  const placed = localPlacement(location?.placedAt ?? documentation.documentedAt);
+  const arrived = localPlacement(documentation.arrivedAt);
+  const located = localPlacement(location?.placedAt ?? documentation.documentedAt);
+  const finalized = localPlacement(documentation.validatedAt);
   let mainXml = decoder.decode(main.content);
   const textCells: Array<[string, string]> = [
     ["D5", documentation.siteA], ["K5", documentation.siteB], ["D7", documentation.foSectionName],
     ["D9", documentation.topology], ["I11", documentation.routeType], ["D14", documentation.interventionType],
     ["F14", documentation.sla], ["D15", qafTicketNumber(projectId)], ["D16", documentation.departureLocality], ["C23", documentation.cause],
+    ["C25", documentation.incidentDescription], ["C29", documentation.remediationDescription],
   ];
   for (const [cell, value] of textCells) {
     if (value) mainXml = writeText(mainXml, cell, value);
@@ -216,13 +240,12 @@ export async function buildOrangeQafXlsx(projectId: string) {
     if (Number.isFinite(length) && length > 0) mainXml = writeText(mainXml, "I56", `${Number(length.toFixed(2))} m`);
     if (documentation.measurementPhotoNames.length) mainXml = writeText(mainXml, "K56", documentation.measurementPhotoNames.join(", "));
   }
-  if (placed) {
-    for (const row of [19, 20]) {
-      mainXml = writeNumber(mainXml, `C${row}`, placed.day);
-      mainXml = writeNumber(mainXml, `D${row}`, placed.month);
-      mainXml = writeNumber(mainXml, `E${row}`, placed.year);
-      mainXml = writeText(mainXml, `G${row}`, placed.time);
-    }
+  for (const [row, timestamp] of [[19, arrived], [20, located], [21, finalized]] as const) {
+    if (!timestamp) continue;
+    mainXml = writeNumber(mainXml, `C${row}`, timestamp.day);
+    mainXml = writeNumber(mainXml, `D${row}`, timestamp.month);
+    mainXml = writeNumber(mainXml, `E${row}`, timestamp.year);
+    mainXml = writeText(mainXml, `G${row}`, timestamp.time);
   }
   main.content = encoder.encode(mainXml);
 
