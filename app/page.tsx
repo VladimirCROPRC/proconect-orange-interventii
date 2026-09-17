@@ -6,8 +6,9 @@ import { FoSplicesSection } from "./fo-splices";
 import { SiteOperationsSection } from "./site-operations";
 import { InterventionOperationsSection } from "./intervention-operations";
 import { ProjectDocumentsSection } from "./project-documents";
-import { GoogleDriveSettings, type GoogleDriveStatus } from "./google-drive-settings";
+import type { GoogleDriveStatus } from "./google-drive-settings";
 import { OneDriveSettings } from "./onedrive-settings";
+import { MapSitesSettings } from "./map-sites-settings";
 import { TechnicianMap } from "./technician-map";
 import { fetchProjectFiles, formatCapturedAt, uploadProjectFile } from "./client-storage";
 import { initialCpeCatalog, type CpeCatalogItem, type ProjectActivityType, type ProjectRecord } from "./project-data";
@@ -425,7 +426,6 @@ export default function Home() {
   const formActivityType = editingProject?.activityType ?? currentActivitySection.type;
   const isInstallationForm = formActivityType === "Instalare";
   const isOrangeForm = formActivityType === "Intervenție Orange";
-  const showInstallationNavigation = view === "projects" || isDocumentationView || (view === "documents" && activeProject.activityType === "Instalare");
   const displayedAccountName = currentAccount.name;
   const displayedAccountRole = currentAccount.role;
   const activeFieldDocumentation = fieldDocumentation[activeProject.id] ?? {};
@@ -512,7 +512,7 @@ export default function Home() {
       const payload = (await response.json()) as { account?: SignedInAccount; error?: string };
       if (!response.ok || !payload.account) throw new Error(payload.error || "Autentificarea a eșuat.");
       setAuthenticatedAccount(payload.account);
-      setView("projects");
+      setView("orange-interventions");
     } catch (error) {
       setAuthenticationError(error instanceof Error ? error.message : "Autentificarea a eșuat.");
     } finally {
@@ -557,7 +557,7 @@ export default function Home() {
       setAuthenticatedAccount(null);
       setProjectDataReady(false);
       setAuthenticationError("");
-      setView("projects");
+      setView("orange-interventions");
       setSelected(null);
       setModal(null);
       setProjects([]);
@@ -1146,7 +1146,7 @@ export default function Home() {
         : projects.find((project) => project.activityType === "Instalare");
       if (!installation?.id) {
         showToast("Creează mai întâi o instalare pentru a completa documentația.");
-        setView("projects");
+        setView("orange-interventions");
         return;
       }
       destinationProject = installation;
@@ -1157,7 +1157,7 @@ export default function Home() {
     }
     if ((next === "intervention-workspace" || next === "intervention-execution" || next === "intervention-documentation" || next === "survey-workspace") && projects.length === 0) {
       showToast("Creează mai întâi o lucrare în secțiunea dedicată.");
-      setView("projects");
+      setView("orange-interventions");
       return;
     }
     const projectWorkspace = next === "client" || next === "route" || next === "splices" || next === "site" || next === "intervention-workspace" || next === "intervention-execution" || next === "survey-workspace";
@@ -1255,18 +1255,6 @@ export default function Home() {
           {canManageDocuments && <button className={view === "drive" ? "active" : ""} onClick={() => goTo("drive")}>
             <span className="nav-symbol">AD</span> Administrare
           </button>}
-          {showInstallationNavigation && <>
-            <p>DOCUMENTAȚIE INSTALĂRI</p>
-            <button className={view === "client" ? "active" : ""} onClick={() => goTo("client")}><span className="nav-symbol">CL</span> Client</button>
-            <button className={view === "route" ? "active" : ""} onClick={() => goTo("route")}><span className="nav-symbol">TR</span> Traseu FO</button>
-            <button className={view === "splices" ? "active" : ""} onClick={() => goTo("splices")}><span className="nav-symbol">SU</span> Suduri FO</button>
-            <button className={view === "site" ? "active" : ""} onClick={() => goTo("site")}><span className="nav-symbol">ST</span> Operațiuni site</button>
-            {canManageDocuments && (
-              <button className={view === "documents" ? "active" : ""} onClick={() => goTo("documents")}>
-                <span className="nav-symbol">DOC</span> Documente <em>Admin</em>
-              </button>
-            )}
-          </>}
         </nav>
 
         <div className="sidebar-footer">
@@ -1626,7 +1614,7 @@ export default function Home() {
           onSaved={saveInterventionSummary}
         />}
         {view === "map" && currentAccount.role === "Tehnician" && <TechnicianMap />}
-        {view === "drive" && authenticatedAccount?.role === "Admin" && <GoogleDriveSettings initialStatus={driveStatus} onStatusChange={setDriveStatus} onNotify={showToast} />}
+        {view === "drive" && authenticatedAccount?.role === "Admin" && <MapSitesSettings onNotify={showToast} />}
         {view === "drive" && authenticatedAccount?.role === "Admin" && <OneDriveSettings />}
         {view === "route" && <FoRouteSection project={activeProject} initialSummary={activeFieldDocumentation.route} onNotify={showToast} onSaved={saveRouteSummary} />}
         {view === "splices" && <FoSplicesSection project={activeProject} initialSummary={activeFieldDocumentation.splices} onNotify={showToast} onSaved={saveSpliceSummary} />}
