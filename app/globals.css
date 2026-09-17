@@ -11587,3 +11587,35 @@ td > small {
     flex: 1 1 220px;
   }
 }
+
+
+/* Management · Materiale */
+.inventory-page{max-width:1180px;margin:0 auto;padding:48px 32px 80px}
+.inventory-page .page-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:24px;margin-bottom:24px}
+.inventory-page .page-heading h1{margin:6px 0 8px;color:#20386d;font-size:34px}
+.inventory-page .page-heading p,.inventory-card>p{color:#71809a;margin:0 0 20px}
+.inventory-page .eyebrow{color:#3463a5;font-size:12px;font-weight:800;letter-spacing:.14em}
+.inventory-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+.inventory-card{background:#fff;border:1px solid #dbe3ef;border-radius:10px;padding:22px;box-shadow:0 8px 24px rgba(32,56,109,.05)}
+.inventory-card-wide{grid-column:1/-1}
+.inventory-card h3{color:#20386d;margin:0 0 6px}
+.inventory-card label{display:flex;flex-direction:column;gap:7px;margin-bottom:14px;color:#3f4c63;font-size:13px;font-weight:700}
+.inventory-card input,.inventory-card select{min-height:42px;border:1px solid #d6deea;border-radius:7px;background:#fff;padding:8px 11px;color:#223659}
+.inventory-form-row{display:grid;grid-template-columns:1fr .7fr 2fr .7fr 1.2fr;gap:12px}
+.inventory-tags{display:flex;flex-wrap:wrap;gap:7px;margin-top:18px}
+.inventory-tags span{background:#eef3fb;border-radius:999px;padding:6px 10px;color:#34558e;font-size:12px;font-weight:700}
+.inventory-assignments{margin-top:18px;border-top:1px solid #edf0f5}
+.inventory-assignments div{display:flex;justify-content:space-between;gap:16px;padding:9px 0;border-bottom:1px solid #edf0f5;font-size:13px}
+.inventory-assignments span{color:#71809a}
+.inventory-table-card{margin-top:16px}
+.inventory-table-head{display:flex;align-items:center;justify-content:space-between;gap:20px}
+.inventory-table-head input{width:min(360px,100%)}
+.inventory-table{margin-top:14px;border-top:1px solid #e7ebf2}
+.inventory-table-row{display:grid;grid-template-columns:150px minmax(260px,1fr) 110px 130px;gap:14px;align-items:center;padding:11px 8px;border-bottom:1px solid #edf0f5;font-size:13px}
+.inventory-table-title{background:#f7f9fc;color:#65738c}
+.inventory-negative{color:#c33434}
+.inventory-empty{padding:20px;color:#71809a;text-align:center}
+.inventory-movement{display:grid;grid-template-columns:minmax(260px,1fr) 130px 220px;gap:16px;align-items:center;padding:11px 8px;border-bottom:1px solid #edf0f5}
+.inventory-movement div{display:flex;flex-direction:column;gap:3px}
+.inventory-movement span,.inventory-movement small{color:#71809a}
+@media(max-width:900px){.inventory-page{padding:24px 16px 60px}.inventory-grid{grid-template-columns:1fr}.inventory-form-row{grid-template-columns:1fr}.inventory-table{overflow-x:auto}.inventory-table-row{min-width:720px}.inventory-movement{grid-template-columns:1fr}.inventory-page .page-heading{flex-direction:column}}
