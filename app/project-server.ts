@@ -210,6 +210,7 @@ export async function ensureProjectData() {
   for (const equipment of initialCpeCatalog) {
     statements.push(getRawDb().prepare("INSERT OR IGNORE INTO cpe_catalog (id, name, requires_grounding, created_at) VALUES (?, ?, ?, ?)").bind(crypto.randomUUID(), equipment.name, equipment.requiresGrounding ? 1 : 0, now));
   }
+  if (!statements.length) return;
   await getRawDb().batch(statements);
 }
 
