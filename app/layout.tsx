@@ -3,7 +3,7 @@ import "./globals.css";
 import { PwaRegistration } from "./pwa-registration";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://proconect-orange-interventii.vladimir-carlan.workers.dev"),
+  metadataBase: new URL("https://orange.proconect.online"),
   title: "Proconect Orange Intervenții",
   description:
     "Management, execuție și documentare pentru intervențiile Orange.",
@@ -42,7 +42,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#ff7900",
+  themeColor: "#172a5a",
   colorScheme: "light",
 };
 
