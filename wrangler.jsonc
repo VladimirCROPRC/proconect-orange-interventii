@@ -1,27 +1,32 @@
 {
-  "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "proconect-orange-interventii",
-  "main": "dist/server/index.js",
-  "compatibility_date": "2026-08-04",
-  "assets": {
-    "directory": "dist/client",
-    "binding": "ASSETS"
-  },
-  "observability": {
-    "enabled": true
-  },
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "proconect-orange-interventii-db",
-      "database_id": "YOUR_ORANGE_D1_DATABASE_ID",
-      "migrations_dir": "drizzle"
-    }
-  ],
-  "r2_buckets": [
-    {
-      "binding": "BUCKET",
-      "bucket_name": "proconect-orange-interventii-files"
-    }
-  ]
+	"$schema": "./node_modules/wrangler/config-schema.json",
+	"name": "proconect-orange-interventii",
+	"main": "dist/server/index.js",
+	"compatibility_date": "2026-08-04",
+	"assets": {
+		"directory": "dist/client",
+		"binding": "ASSETS"
+	},
+	"observability": {
+		"enabled": true
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "proconect-orange-interventii-db",
+			"database_id": "c15dae09-d797-408d-a7c8-c5a3f4252394",
+			"migrations_dir": "drizzle"
+		}
+	],
+	"r2_buckets": [
+		{
+			"binding": "BUCKET",
+			"bucket_name": "proconect-orange-interventii-files"
+		},
+		{
+			"bucket_name": "proconect-orange-interventii-files",
+			"binding": "proconect_orange_interventii_files",
+			"remote": true
+		}
+	]
 }
