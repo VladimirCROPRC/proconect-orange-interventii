@@ -1,6 +1,5 @@
 import { env } from "cloudflare:workers";
 import { getRawDb } from "../db";
-import { zipPackage } from "./report-docx";
 
 type AssetEnvironment = { ASSETS?: { fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> } };
 type ZipEntry = { name: string; content: Uint8Array };
@@ -13,6 +12,58 @@ type ProjectRow = {
 const decoder = new TextDecoder();
 const encoder = new TextEncoder();
 const firstApplicationRow = 1919;
+
+function crc32(bytes: Uint8Array) {
+  let crc = 0xffffffff;
+  for (const byte of bytes) {
+    crc ^= byte;
+    for (let bit = 0; bit < 8; bit += 1) crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1));
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function join(parts: Uint8Array[]) {
+  const result = new Uint8Array(parts.reduce((total, part) => total + part.length, 0));
+  let offset = 0;
+  for (const part of parts) { result.set(part, offset); offset += part.length; }
+  return result;
+}
+
+async function deflate(bytes: Uint8Array) {
+  const stream = new Response(bytes.slice().buffer).body!.pipeThrough(new CompressionStream("deflate-raw"));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+async function compressedZip(files: ZipEntry[]) {
+  const local: Uint8Array[] = [];
+  const central: Uint8Array[] = [];
+  let offset = 0;
+  for (const file of files) {
+    const name = encoder.encode(file.name);
+    const data = file.content;
+    const packed = await deflate(data);
+    const crc = crc32(data);
+    const localHeader = new Uint8Array(30 + name.length);
+    const lv = new DataView(localHeader.buffer);
+    lv.setUint32(0, 0x04034b50, true); lv.setUint16(4, 20, true); lv.setUint16(6, 0x0800, true);
+    lv.setUint16(8, 8, true); lv.setUint32(14, crc, true); lv.setUint32(18, packed.length, true); lv.setUint32(22, data.length, true);
+    lv.setUint16(26, name.length, true); localHeader.set(name, 30);
+    local.push(localHeader, packed);
+    const centralHeader = new Uint8Array(46 + name.length);
+    const cv = new DataView(centralHeader.buffer);
+    cv.setUint32(0, 0x02014b50, true); cv.setUint16(4, 20, true); cv.setUint16(6, 20, true); cv.setUint16(8, 0x0800, true);
+    cv.setUint16(10, 8, true); cv.setUint32(16, crc, true); cv.setUint32(20, packed.length, true); cv.setUint32(24, data.length, true);
+    cv.setUint16(28, name.length, true); cv.setUint32(42, offset, true); centralHeader.set(name, 46);
+    central.push(centralHeader);
+    offset += localHeader.length + packed.length;
+  }
+  const centralSize = central.reduce((total, part) => total + part.length, 0);
+  const end = new Uint8Array(22);
+  const ev = new DataView(end.buffer);
+  ev.setUint32(0, 0x06054b50, true); ev.setUint16(8, files.length, true); ev.setUint16(10, files.length, true);
+  ev.setUint32(12, centralSize, true); ev.setUint32(16, offset, true);
+  return join([...local, ...central, end]);
+}
 
 async function unzip(bytes: Uint8Array): Promise<ZipEntry[]> {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
@@ -139,6 +190,6 @@ export async function buildOrangeCentralizerXlsx() {
   sheet.content = encoder.encode(sheetXml);
   const lastRow = Math.max(1918, firstApplicationRow + rows.length - 1);
   table.content = encoder.encode(decoder.decode(table.content).replace(/ref="A1:AE1918"/g, `ref="A1:AE${lastRow}"`));
-  const workbook = zipPackage(files);
+  const workbook = await compressedZip(files);
   return workbook.buffer.slice(workbook.byteOffset, workbook.byteOffset + workbook.byteLength) as ArrayBuffer;
 }
