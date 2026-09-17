@@ -81,11 +81,13 @@ async function orangeDocumentation(projectId: string) {
   let validatedAt: number | undefined;
   let services: Array<{ code?: string; quantity?: number }> = [];
   let cause = "";
+  let assessedCableCapacity = 0;
+  let assessedRouteType = "";
   if (row.content_json) {
     try {
       const documentation = JSON.parse(row.content_json) as {
         intervention?: {
-          assessment?: { cause?: string; arrivedAt?: number; incidentDescription?: string; damageLocation?: DamageLocation; documentedAt?: number; siteMeasurement?: SiteMeasurement };
+          assessment?: { cause?: string; arrivedAt?: number; incidentDescription?: string; damageLocation?: DamageLocation; documentedAt?: number; siteMeasurement?: SiteMeasurement; cableCapacity?: number; routeType?: string };
           execution?: { materials?: Material[]; activities?: ExecutionActivity[]; remediationDescription?: string };
           documentation?: { incidentDescription?: string; remediationDescription?: string; services?: Array<{ code?: string; quantity?: number }>; validatedAt?: number };
         };
@@ -101,6 +103,8 @@ async function orangeDocumentation(projectId: string) {
       validatedAt = documentation.intervention?.documentation?.validatedAt;
       services = Array.isArray(documentation.intervention?.documentation?.services) ? documentation.intervention!.documentation!.services! : [];
       cause = documentation.intervention?.assessment?.cause ?? "";
+      assessedCableCapacity = Number(documentation.intervention?.assessment?.cableCapacity) || 0;
+      assessedRouteType = documentation.intervention?.assessment?.routeType ?? "";
     } catch {
       // The ticket data remains usable even if older field documentation is malformed.
     }
@@ -119,7 +123,7 @@ async function orangeDocumentation(projectId: string) {
       .filter((junction) => Number.isFinite(junction.lat) && Number.isFinite(junction.lon))
       .slice(0, 4),
     siteA: row.client ?? "", siteB: row.address ?? "", foSectionName: row.fo_section_name ?? "",
-    topology: row.topology ?? "", cableCapacity: Number(row.cable_capacity) || 0, routeType: row.route_type ?? "",
+    topology: row.topology ?? "", cableCapacity: assessedCableCapacity || Number(row.cable_capacity) || 0, routeType: assessedRouteType || row.route_type || "",
     interventionType: row.orange_intervention_type ?? "", sla: row.sla ?? "", departureLocality: row.departure_locality ?? "",
   };
 }
