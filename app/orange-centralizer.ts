@@ -178,6 +178,7 @@ export async function buildOrangeCentralizerXlsx() {
   const sheet = files.find((file) => file.name === "xl/worksheets/sheet6.xml");
   const table = files.find((file) => file.name === "xl/tables/table3.xml");
   if (!sheet || !table) throw new Error("Șablonul nu conține foaia sau tabelul centralizatorului Orange.");
+  const lastRow = Math.max(1918, firstApplicationRow + rows.length - 1);
   let sheetXml = decoder.decode(sheet.content);
   rows.forEach((project, index) => {
     const rowNumber = firstApplicationRow + index;
@@ -187,8 +188,14 @@ export async function buildOrangeCentralizerXlsx() {
       ? sheetXml.replace(rowPattern, replacement)
       : sheetXml.replace("</sheetData>", `${replacement}</sheetData>`);
   });
+  // The source workbook contains formatting and a stray cell down to row 1,046,918.
+  // Google Sheets counts that declared grid as tens of millions of cells and refuses
+  // to open the file even when the compressed XLSX is small. Keep only real rows and
+  // constrain validation ranges to the populated table.
+  sheetXml = sheetXml.replace(/<row r="(\d+)"[^>]*>.*?<\/row>/g, (rowXml, rowNumber: string) => Number(rowNumber) > lastRow ? "" : rowXml);
+  sheetXml = sheetXml.replace(/<dimension ref="[^"]+"\/>/, `<dimension ref="A1:AV${lastRow}"/>`);
+  sheetXml = sheetXml.replace(/1048576/g, String(lastRow)).replace(/1046918/g, String(lastRow));
   sheet.content = encoder.encode(sheetXml);
-  const lastRow = Math.max(1918, firstApplicationRow + rows.length - 1);
   table.content = encoder.encode(decoder.decode(table.content).replace(/ref="A1:AE1918"/g, `ref="A1:AE${lastRow}"`));
   const workbook = await compressedZip(files);
   return workbook.buffer.slice(workbook.byteOffset, workbook.byteOffset + workbook.byteLength) as ArrayBuffer;
