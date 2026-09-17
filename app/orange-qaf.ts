@@ -6,6 +6,8 @@ import { zipPackage } from "./report-docx";
 type AssetEnvironment = { ASSETS?: { fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> } };
 type Material = { source?: string; code?: string; quantity?: number };
 type DamageLocation = { lat?: number; lon?: number; placedAt?: number };
+type ExecutionJunction = { lat?: number; lon?: number; kind?: string };
+type ExecutionActivity = { type?: string; junction?: ExecutionJunction };
 type ZipEntry = { name: string; content: Uint8Array };
 const decoder = new TextDecoder();
 const encoder = new TextEncoder();
@@ -67,15 +69,20 @@ async function orangeDocumentation(projectId: string) {
   }>();
   if (!row) return null;
   let materials: Material[] = [];
+  let activities: ExecutionActivity[] = [];
   let damageLocation: DamageLocation | undefined;
   let documentedAt: number | undefined;
   let cause = "";
   if (row.content_json) {
     try {
       const documentation = JSON.parse(row.content_json) as {
-        intervention?: { assessment?: { cause?: string; damageLocation?: DamageLocation; documentedAt?: number }; execution?: { materials?: Material[] } };
+        intervention?: {
+          assessment?: { cause?: string; damageLocation?: DamageLocation; documentedAt?: number };
+          execution?: { materials?: Material[]; activities?: ExecutionActivity[] };
+        };
       };
       materials = Array.isArray(documentation.intervention?.execution?.materials) ? documentation.intervention!.execution!.materials! : [];
+      activities = Array.isArray(documentation.intervention?.execution?.activities) ? documentation.intervention!.execution!.activities! : [];
       damageLocation = documentation.intervention?.assessment?.damageLocation;
       documentedAt = documentation.intervention?.assessment?.documentedAt;
       cause = documentation.intervention?.assessment?.cause ?? "";
@@ -85,6 +92,11 @@ async function orangeDocumentation(projectId: string) {
   }
   return {
     materials, damageLocation, documentedAt, cause,
+    newJunctions: activities
+      .filter((activity) => activity.type === "junction-installation" && activity.junction?.kind === "new")
+      .map((activity) => activity.junction!)
+      .filter((junction) => Number.isFinite(junction.lat) && Number.isFinite(junction.lon))
+      .slice(0, 4),
     siteA: row.client ?? "", siteB: row.address ?? "", foSectionName: row.fo_section_name ?? "",
     topology: row.topology ?? "", cableCapacity: Number(row.cable_capacity) || 0, routeType: row.route_type ?? "",
     interventionType: row.orange_intervention_type ?? "", sla: row.sla ?? "", departureLocality: row.departure_locality ?? "",
@@ -171,6 +183,11 @@ export async function buildOrangeQafXlsx(projectId: string) {
     mainXml = writeNumber(mainXml, "C34", Number(location.lat!.toFixed(6)));
     mainXml = writeNumber(mainXml, "E34", Number(location.lon!.toFixed(6)));
   }
+  documentation.newJunctions.forEach((junction, index) => {
+    const row = 41 + index;
+    mainXml = writeNumber(mainXml, `C${row}`, Number(junction.lat!.toFixed(6)));
+    mainXml = writeNumber(mainXml, `E${row}`, Number(junction.lon!.toFixed(6)));
+  });
   if (placed) {
     for (const row of [19, 20]) {
       mainXml = writeNumber(mainXml, `C${row}`, placed.day);
