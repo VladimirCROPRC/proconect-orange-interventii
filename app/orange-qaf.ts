@@ -50,9 +50,12 @@ async function unzip(bytes: Uint8Array): Promise<ZipEntry[]> {
 function writeQuantity(xml: string, cell: string, quantity: number) {
   const value = Number.isInteger(quantity) ? String(quantity) : String(Number(quantity.toFixed(3)));
   const selfClosing = new RegExp(`<c r="${cell}"([^>]*)\\/>`);
-  if (selfClosing.test(xml)) return xml.replace(selfClosing, `<c r="${cell}"$1><v>${value}</v></c>`);
   const populated = new RegExp(`<c r="${cell}"([^>]*)>.*?<\\/c>`);
-  return populated.test(xml) ? xml.replace(populated, `<c r="${cell}"$1><v>${value}</v></c>`) : xml;
+  const render = (attributes: string) => `<c r="${cell}"${attributes.replace(/\s+t="[^"]*"/g, "")}><v>${value}</v></c>`;
+  const empty = selfClosing.exec(xml);
+  if (empty) return xml.replace(empty[0], render(empty[1]));
+  const existing = populated.exec(xml);
+  return existing ? xml.replace(existing[0], render(existing[1])) : xml;
 }
 
 async function orangeDocumentation(projectId: string) {
@@ -96,7 +99,7 @@ function writeText(xml: string, cell: string, value: string) {
   const selfClosing = new RegExp(`<c r="${cell}"([^>]*)\\/>`);
   const populated = new RegExp(`<c r="${cell}"([^>]*)>.*?<\\/c>`);
   const escaped = value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  const render = (attributes: string) => `<c r="${cell}"${attributes.replace(/\\s+t="[^"]*"/g, "")} t="inlineStr"><is><t>${escaped}</t></is></c>`;
+  const render = (attributes: string) => `<c r="${cell}"${attributes.replace(/\s+t="[^"]*"/g, "")} t="inlineStr"><is><t>${escaped}</t></is></c>`;
   const empty = selfClosing.exec(xml);
   if (empty) return xml.replace(empty[0], render(empty[1]));
   const existing = populated.exec(xml);
