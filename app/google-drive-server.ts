@@ -138,7 +138,7 @@ export async function getDriveStatus(request: Request) {
     accountEmail: configuration?.account_email ?? "",
     clientId: configuration?.client_id ?? "",
     rootFolderId: configuration?.root_folder_id ?? "",
-    rootFolderName: configuration?.root_folder_name ?? "Proconect B2B",
+    rootFolderName: configuration?.root_folder_name ?? "Proconect Orange Interventii",
     rootFolderUrl: configuration?.root_folder_id ? `https://drive.google.com/drive/folders/${configuration.root_folder_id}` : "",
     redirectUri: driveRedirectUri(request),
     projectsTotal: projectCount?.count ?? 0,
@@ -167,7 +167,7 @@ export async function configureDrive(clientId: string, clientSecret: string) {
     getRawDb().prepare("DELETE FROM google_drive_project_folders"),
     getRawDb().prepare("DELETE FROM google_drive_oauth_states"),
     getRawDb().prepare(
-      "INSERT INTO google_drive_settings (id, client_id, encrypted_client_secret, account_email, encrypted_access_token, encrypted_refresh_token, access_token_expires_at, root_folder_id, root_folder_name, connected_by, created_at, updated_at) VALUES (?, ?, ?, '', '', '', 0, '', 'Proconect B2B', '', ?, ?) ON CONFLICT(id) DO UPDATE SET client_id = excluded.client_id, encrypted_client_secret = excluded.encrypted_client_secret, account_email = '', encrypted_access_token = '', encrypted_refresh_token = '', access_token_expires_at = 0, root_folder_id = '', root_folder_name = excluded.root_folder_name, connected_by = '', updated_at = excluded.updated_at",
+      "INSERT INTO google_drive_settings (id, client_id, encrypted_client_secret, account_email, encrypted_access_token, encrypted_refresh_token, access_token_expires_at, root_folder_id, root_folder_name, connected_by, created_at, updated_at) VALUES (?, ?, ?, '', '', '', 0, '', 'Proconect Orange Interventii', '', ?, ?) ON CONFLICT(id) DO UPDATE SET client_id = excluded.client_id, encrypted_client_secret = excluded.encrypted_client_secret, account_email = '', encrypted_access_token = '', encrypted_refresh_token = '', access_token_expires_at = 0, root_folder_id = '', root_folder_name = excluded.root_folder_name, connected_by = '', updated_at = excluded.updated_at",
     ).bind(settingsId, normalizedClientId, encryptedClientSecret, now, now),
   ]);
   return { configured: true as const };
@@ -473,7 +473,7 @@ export async function syncReportIfConnected(projectId: string) {
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     document.buffer,
     sectionFolders.documents,
-    "Raport administrativ Word generat din Proconect B2B",
+    "Raport administrativ Word generat din Proconect Orange Interventii",
     folders.report_file_id || undefined
   );
   await getRawDb().prepare("UPDATE google_drive_project_folders SET report_file_id = ?, updated_at = ? WHERE project_id = ?").bind(driveFileId, Date.now(), projectId).run();
@@ -485,7 +485,7 @@ export async function syncReportIfConnected(projectId: string) {
       "application/pdf",
       materialPdf,
       sectionFolders.documents,
-      "Fisa de materiale PDF landscape generata din Proconect B2B",
+      "Fisa de materiale PDF landscape generata din Proconect Orange Interventii",
       await findDriveFileByName(sectionFolders.documents, materialName),
     );
   }

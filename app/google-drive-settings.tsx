@@ -219,7 +219,7 @@ export function GoogleDriveSettings({ initialStatus, onStatusChange, onNotify }:
             </>
           ) : (
             <>
-              <p>{status?.configured ? "Datele OAuth sunt configurate. Alege contul Google al companiei și aprobă accesul la dosarele create de Proconect B2B." : "Adaugă o singură dată datele OAuth Google Cloud, apoi autorizează contul Google Drive al companiei."}</p>
+              <p>{status?.configured ? "Datele OAuth sunt configurate. Alege contul Google al companiei și aprobă accesul la dosarele create de Proconect Orange Interventii." : "Adaugă o singură dată datele OAuth Google Cloud, apoi autorizează contul Google Drive al companiei."}</p>
               {status?.configured && <button className="primary-button drive-authorize-button" onClick={() => void authorizeGoogle()} disabled={authorizing}>{authorizing ? "Se deschide Google..." : "Conectează contul Google"} <span>→</span></button>}
             </>
           )}
@@ -259,7 +259,7 @@ export function GoogleDriveSettings({ initialStatus, onStatusChange, onNotify }:
         <section className="project-card drive-structure-card">
           <div className="card-heading"><div><h2>Structura dosarelor</h2><p>Patru categorii independente, fiecare cu propriile lucrări.</p></div></div>
           <div className="drive-folder-tree">
-            <div className="drive-tree-root"><span>▰</span><strong>Proconect B2B</strong></div>
+            <div className="drive-tree-root"><span>▰</span><strong>Proconect Orange Interventii</strong></div>
             {Object.entries(activityFolders).map(([activity, folder]) => <div className="drive-activity-tree" key={activity}>
               <div className="drive-tree-project"><span>▰</span><strong>{folder}</strong><small>{activity === "Instalare" ? "Instalări B2B" : activity === "Intervenție" ? "Intervenții tehnice" : activity === "Intervenție Orange" ? "Intervenții Orange" : "Vizite și evaluări"}</small></div>
               <div className="drive-tree-section"><span>▰</span><div><strong>{activity === "Instalare" ? "RID10482" : activity === "Intervenție" ? "INC-10483 · Număr tichet" : activity === "Intervenție Orange" ? "Număr tichet Orange" : "RID + Request ID"}</strong><small>{(activity === "Intervenție" || activity === "Intervenție Orange") ? "Dosarul tichetului" : "Dosarul lucrării"}</small></div></div>
