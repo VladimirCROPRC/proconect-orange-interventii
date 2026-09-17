@@ -3,6 +3,7 @@ import { getRawDb } from "../db";
 import { requiredInterventionCablePhotos, type InterventionDocumentationSummary, type InterventionExecutionActivity, type InterventionExecutionSummary, type InterventionJunction, type ProjectFieldDocumentation } from "./field-documentation";
 import { initialCpeCatalog, initialFieldDocumentation, initialProjects, type CpeCatalogItem, type ProjectActivityType, type ProjectRecord } from "./project-data";
 import type { AuthenticatedAccount } from "./server-auth";
+import { orangeServicePackages } from "./orange-services";
 
 type ProjectRow = {
   id: string;
@@ -800,9 +801,16 @@ export async function saveFieldDocumentation(projectId: string, section: string,
         return { error: "Validează descrierea incidentului și descrierea remedierii.", status: 400 as const };
       }
       const services = intervention.documentation.services ?? [];
-      const serviceCodes = new Set(["SP1 FO", "SP2 FOA", "SP3 FOA", "CR4 FOA", "SP5 FOU", "CR6 FOU", "CR7 FOU"]);
-      if (!Array.isArray(services) || services.length > 1 || services.some((service) => !serviceCodes.has(String(service.code)) || Number(service.quantity) !== 1)) {
-        return { error: "Pachetul de servicii selectat nu este valid.", status: 400 as const };
+      const serviceCodes = new Set(orangeServicePackages.map((service) => service.code));
+      if (!Array.isArray(services) || services.length > orangeServicePackages.length || services.some((service) => !serviceCodes.has(String(service.code)) || typeof service.quantity !== "number" || !Number.isFinite(service.quantity) || service.quantity <= 0 || service.quantity > 1_000_000)) {
+        return { error: "Lista serviciilor selectate nu este validă.", status: 400 as const };
+      }
+      if (new Set(services.map((service) => service.code)).size !== services.length) {
+        return { error: "Același serviciu nu poate fi introdus de două ori.", status: 400 as const };
+      }
+      const mainCodes = new Set(orangeServicePackages.filter((service) => service.mainPackage).map((service) => service.code));
+      if (services.filter((service) => mainCodes.has(service.code)).length > 1) {
+        return { error: "Poți selecta maximum un pachet principal SP/CR.", status: 400 as const };
       }
       content = {
         ...intervention,

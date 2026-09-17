@@ -161,7 +161,9 @@ export function InterventionOperationsSection({
   const [reviewMaterials, setReviewMaterials] = useState<InterventionMaterialSelection[]>(initialSummary?.execution?.materials ?? []);
   const [reviewMaterialKey, setReviewMaterialKey] = useState("");
   const [reviewMaterialQuantity, setReviewMaterialQuantity] = useState("");
-  const [serviceCode, setServiceCode] = useState(initialSummary?.documentation?.services?.[0]?.code ?? "");
+  const [reviewServices, setReviewServices] = useState(initialSummary?.documentation?.services ?? []);
+  const [serviceCode, setServiceCode] = useState("");
+  const [serviceQuantity, setServiceQuantity] = useState("1");
 
   useEffect(() => {
     let mounted = true;
@@ -203,7 +205,7 @@ export function InterventionOperationsSection({
       if (mounted) setReviewIncident(initialSummary?.documentation?.incidentDescription ?? initialSummary?.assessment?.incidentDescription ?? "");
       if (mounted) setReviewRemediation(initialSummary?.documentation?.remediationDescription ?? initialSummary?.execution?.remediationDescription ?? "");
       if (mounted) setReviewMaterials(initialSummary?.execution?.materials ?? []);
-      if (mounted) setServiceCode(initialSummary?.documentation?.services?.[0]?.code ?? "");
+      if (mounted) setReviewServices(initialSummary?.documentation?.services ?? []);
     });
     return () => {
       mounted = false;
@@ -325,7 +327,7 @@ export function InterventionOperationsSection({
           report: report.trim(),
           incidentDescription: reviewIncident.trim(),
           remediationDescription: reviewRemediation.trim(),
-          services: serviceCode ? [{ code: serviceCode, quantity: 1 }] : [],
+          services: reviewServices,
           validatedAt: 0,
           validatedBy: "",
         },
@@ -347,6 +349,22 @@ export function InterventionOperationsSection({
     setReviewMaterials((current) => [...current.filter((entry) => !(entry.source === source && entry.code === code)), { source, code, description: item.description, unit: item.unit, quantity }]);
     setReviewMaterialKey("");
     setReviewMaterialQuantity("");
+  }
+
+  function addReviewedService() {
+    const service = orangeServicePackages.find((item) => item.code === serviceCode);
+    const quantity = Number(serviceQuantity.replace(",", "."));
+    if (!service || !Number.isFinite(quantity) || quantity <= 0 || quantity > 1_000_000) return;
+    if (service.mainPackage) {
+      const otherMainPackage = reviewServices.find((selection) => selection.code !== service.code && orangeServicePackages.find((item) => item.code === selection.code)?.mainPackage);
+      if (otherMainPackage) {
+        onNotify("Poți selecta un singur pachet principal SP/CR.");
+        return;
+      }
+    }
+    setReviewServices((current) => [...current.filter((item) => item.code !== service.code), { code: service.code, quantity }]);
+    setServiceCode("");
+    setServiceQuantity("1");
   }
 
   async function downloadKmz() {
@@ -590,7 +608,11 @@ export function InterventionOperationsSection({
               <button type="button" className="secondary-button" onClick={addReviewedMaterial}>Adaugă / actualizează materialul</button>
               {reviewMaterials.map((item) => <div className="intervention-records-list" key={`${item.source}:${item.code}`}><article><span>{item.source === "orange" ? "OR" : "PC"}</span><div><strong>{item.code} · {item.description}</strong></div><b>{item.quantity} {item.unit}</b><button type="button" className="record-delete-button" onClick={() => setReviewMaterials((current) => current.filter((entry) => entry !== item))}>Șterge</button></article></div>)}
 
-              <label className="intervention-damage-field"><span>Pachet de servicii QAF</span><select value={serviceCode} onChange={(event) => setServiceCode(event.target.value)}><option value="">Fără pachet selectat</option>{orangeServicePackages.map((service) => <option key={service.code} value={service.code}>{service.code} · {service.description}</option>)}</select></label>
+              <div className="card-heading"><div><h2>Servicii QAF</h2><p>Lista completă din foaia Services. Se poate selecta maximum un pachet principal SP/CR.</p></div></div>
+              <label className="intervention-damage-field"><span>Serviciu</span><select value={serviceCode} onChange={(event) => setServiceCode(event.target.value)}><option value="">Selectează serviciul</option>{orangeServicePackages.map((service) => <option key={service.code} value={service.code}>{service.code} · {service.description} · {service.unit}</option>)}</select></label>
+              <label className="intervention-damage-field"><span>Cantitate</span><input type="number" min="0.01" max="1000000" step="0.01" value={serviceQuantity} onChange={(event) => setServiceQuantity(event.target.value)} /></label>
+              <button type="button" className="secondary-button" onClick={addReviewedService}>Adaugă / actualizează serviciul</button>
+              {reviewServices.map((selection) => { const service = orangeServicePackages.find((item) => item.code === selection.code); return <div className="intervention-records-list" key={selection.code}><article><span>SV</span><div><strong>{selection.code}</strong><small>{service?.description ?? "Serviciu QAF"}</small></div><b>{selection.quantity} {service?.unit ?? ""}</b><button type="button" className="record-delete-button" onClick={() => setReviewServices((current) => current.filter((item) => item.code !== selection.code))}>Șterge</button></article></div>; })}
               <button type="button" className="secondary-button" onClick={() => void downloadKmz()}>Generează KMZ</button>
 
               {executionActivities.length > 0 && <div className="intervention-report-activities">
