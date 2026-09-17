@@ -6,9 +6,8 @@ import { FoSplicesSection } from "./fo-splices";
 import { SiteOperationsSection } from "./site-operations";
 import { InterventionOperationsSection } from "./intervention-operations";
 import { ProjectDocumentsSection } from "./project-documents";
-import type { GoogleDriveStatus } from "./google-drive-settings";
+import { GoogleDriveSettings, type GoogleDriveStatus } from "./google-drive-settings";
 import { OneDriveSettings } from "./onedrive-settings";
-import { MapSitesSettings } from "./map-sites-settings";
 import { TechnicianMap } from "./technician-map";
 import { fetchProjectFiles, formatCapturedAt, uploadProjectFile } from "./client-storage";
 import { initialCpeCatalog, type CpeCatalogItem, type ProjectActivityType, type ProjectRecord } from "./project-data";
@@ -1614,8 +1613,10 @@ export default function Home() {
           onSaved={saveInterventionSummary}
         />}
         {view === "map" && currentAccount.role === "Tehnician" && <TechnicianMap />}
-        {view === "drive" && authenticatedAccount?.role === "Admin" && <MapSitesSettings onNotify={showToast} />}
-        {view === "drive" && authenticatedAccount?.role === "Admin" && <OneDriveSettings />}
+        {view === "drive" && authenticatedAccount?.role === "Admin" && <>
+          <GoogleDriveSettings initialStatus={driveStatus} onStatusChange={setDriveStatus} onNotify={showToast} />
+          <OneDriveSettings />
+        </>}
         {view === "route" && <FoRouteSection project={activeProject} initialSummary={activeFieldDocumentation.route} onNotify={showToast} onSaved={saveRouteSummary} />}
         {view === "splices" && <FoSplicesSection project={activeProject} initialSummary={activeFieldDocumentation.splices} onNotify={showToast} onSaved={saveSpliceSummary} />}
         {view === "site" && <SiteOperationsSection project={activeProject} initialSummary={activeFieldDocumentation.site} onNotify={showToast} onSaved={saveSiteSummary} />}
