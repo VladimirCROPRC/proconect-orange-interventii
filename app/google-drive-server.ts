@@ -37,11 +37,8 @@ const settingsId = "proconect-google-drive";
 const oauthScope = "https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email";
 const activityFolderMarker = "__activityFolder";
 
-export const driveActivityFolders: Record<ProjectActivityType, string> = {
-  Instalare: "Instalari",
-  "Intervenție": "Interventii",
+export const driveActivityFolders: Partial<Record<ProjectActivityType, string>> = {
   "Intervenție Orange": "Interventii Orange",
-  Survey: "Survey",
 };
 
 export const driveSectionFolders: Record<string, string> = {
@@ -54,22 +51,8 @@ export const driveSectionFolders: Record<string, string> = {
   documents: "07_Documente administrative",
 };
 
-const activitySectionFolders: Record<ProjectActivityType, Record<string, string>> = {
-  Instalare: driveSectionFolders,
-  "Intervenție": {
-    safety: "01_Pretask_si_EIP",
-    "intervention-assessment": "02_Constatare",
-    "intervention-execution": "03_Executie",
-    "intervention-documentation": "04_Documentare",
-    project: "05_Documente interventie",
-    documents: "06_Documente administrative",
-  },
+const activitySectionFolders: Partial<Record<ProjectActivityType, Record<string, string>>> = {
   "Intervenție Orange": {},
-  Survey: {
-    safety: "01_Pretask_si_EIP",
-    project: "02_Documente survey",
-    documents: "03_Documente administrative",
-  },
 };
 
 function hexBytes(value: string) {

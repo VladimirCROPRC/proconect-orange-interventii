@@ -166,20 +166,9 @@ export function GoogleDriveSettings({ initialStatus, onStatusChange, onNotify }:
     documents: "06_Documente administrative",
   };
   const activityFolders = status?.activityFolders ?? {
-    Instalare: "Instalari",
-    "Intervenție": "Interventii",
     "Intervenție Orange": "Interventii Orange",
-    Survey: "Survey",
   };
   const activitySections = status?.activitySections ?? {
-    Instalare: sections,
-    "Intervenție": {
-      "intervention-assessment": "01_Constatare",
-      "intervention-execution": "02_Executie",
-      "intervention-documentation": "03_Documentare",
-      project: "04_Documente interventie",
-      documents: "05_Documente administrative",
-    },
     "Intervenție Orange": {},
   };
 
@@ -189,7 +178,7 @@ export function GoogleDriveSettings({ initialStatus, onStatusChange, onNotify }:
         <div>
           <p className="eyebrow">INTEGRĂRI ȘI STOCARE</p>
           <h1>Google Drive</h1>
-          <p>Organizează separat instalările, intervențiile și activitățile survey.</p>
+          <p>Organizează exclusiv tichetele și documentația intervențiilor Orange.</p>
         </div>
         {status?.connected && (
           <button className="primary-button" onClick={() => void syncNow()} disabled={syncing}>
@@ -229,7 +218,7 @@ export function GoogleDriveSettings({ initialStatus, onStatusChange, onNotify }:
       {error && <div className="drive-inline-error" role="alert"><strong>Conectarea necesită atenție</strong><span>{error}</span></div>}
 
       <section className="drive-sync-metrics" aria-label="Starea sincronizării Google Drive">
-        <article><small>LUCRĂRI CU DOSAR DRIVE</small><strong>{status?.projectsSynced ?? 0}<span> / {status?.projectsTotal ?? 0}</span></strong><p>Dosare RID și tichete create</p></article>
+        <article><small>LUCRĂRI CU DOSAR DRIVE</small><strong>{status?.projectsSynced ?? 0}<span> / {status?.projectsTotal ?? 0}</span></strong><p>Dosare pentru tichetele Orange</p></article>
         <article><small>FIȘIERE SINCRONIZATE</small><strong>{status?.filesSynced ?? 0}<span> / {status?.filesTotal ?? 0}</span></strong><p>Documente și fotografii</p></article>
         <article><small>ACCES ȘI SECURITATE</small><strong>{status?.connected ? "Activ" : "Protejat"}</strong><p>Date criptate, acces administrativ</p></article>
       </section>
@@ -257,12 +246,12 @@ export function GoogleDriveSettings({ initialStatus, onStatusChange, onNotify }:
         </section>
 
         <section className="project-card drive-structure-card">
-          <div className="card-heading"><div><h2>Structura dosarelor</h2><p>Patru categorii independente, fiecare cu propriile lucrări.</p></div></div>
+          <div className="card-heading"><div><h2>Structura dosarelor</h2><p>Structură dedicată intervențiilor Orange.</p></div></div>
           <div className="drive-folder-tree">
             <div className="drive-tree-root"><span>▰</span><strong>Proconect Orange Interventii</strong></div>
             {Object.entries(activityFolders).map(([activity, folder]) => <div className="drive-activity-tree" key={activity}>
-              <div className="drive-tree-project"><span>▰</span><strong>{folder}</strong><small>{activity === "Instalare" ? "Instalări B2B" : activity === "Intervenție" ? "Intervenții tehnice" : activity === "Intervenție Orange" ? "Intervenții Orange" : "Vizite și evaluări"}</small></div>
-              <div className="drive-tree-section"><span>▰</span><div><strong>{activity === "Instalare" ? "RID10482" : activity === "Intervenție" ? "INC-10483 · Număr tichet" : activity === "Intervenție Orange" ? "Număr tichet Orange" : "RID + Request ID"}</strong><small>{(activity === "Intervenție" || activity === "Intervenție Orange") ? "Dosarul tichetului" : "Dosarul lucrării"}</small></div></div>
+              <div className="drive-tree-project"><span>▰</span><strong>{folder}</strong><small>Intervenții Orange</small></div>
+              <div className="drive-tree-section"><span>▰</span><div><strong>Număr tichet Orange</strong><small>Dosarul tichetului</small></div></div>
               {Object.entries(activitySections[activity] ?? {}).map(([section, name]) => <div className="drive-tree-section drive-tree-nested" key={section}><span>▰</span><div><strong>{name}</strong><small>{sectionLabels[section] ?? "Documentele lucrării"}</small></div></div>)}
             </div>)}
           </div>
@@ -271,4 +260,3 @@ export function GoogleDriveSettings({ initialStatus, onStatusChange, onNotify }:
     </div>
   );
 }
-
