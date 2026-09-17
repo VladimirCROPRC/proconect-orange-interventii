@@ -64,7 +64,11 @@ function interventionActivityDescription(activity: InterventionExecutionActivity
   }
   const junction = activity.type === "chamber-installation"
     ? interventionJunctionReportLabel(activity.junction, "cameretă nouă").replace(/^joncțiune nouă/, "cameretă nouă")
-    : interventionJunctionReportLabel(activity.junction, "joncțiune nedocumentată");
+    : activity.type === "diagnostics"
+      ? interventionJunctionReportLabel(activity.junction, "punct îndreptare cablu la cald").replace(/^joncțiune (nouă|existentă nedocumentată|nedocumentată)/, "punct îndreptare cablu la cald")
+      : activity.type === "splice-repair"
+        ? interventionJunctionReportLabel(activity.junction, "punct refacere sudură").replace(/^joncțiune (nouă|existentă nedocumentată|nedocumentată)/, "punct refacere sudură")
+        : interventionJunctionReportLabel(activity.junction, "joncțiune nedocumentată");
   const network = activity.junction?.network === "mobile"
     ? " · Orange Mobil"
     : activity.junction?.network === "fixed"
