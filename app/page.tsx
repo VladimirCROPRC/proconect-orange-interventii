@@ -648,8 +648,8 @@ export default function Home() {
       orderNumber: activityType === "Intervenție" ? String(form.get("orderNumber") || "").trim() : "",
       foSectionName: isOrangeForm ? String(form.get("foSectionName") || "").trim() : "",
       topology: (isOrangeForm ? String(form.get("topology") || "") : "") as Project["topology"],
-      cableCapacity: isOrangeForm ? Number(form.get("cableCapacity")) : 0,
-      routeType: (isOrangeForm ? String(form.get("routeType") || "") : "") as Project["routeType"],
+      cableCapacity: editingProject?.cableCapacity ?? 0,
+      routeType: (editingProject?.routeType ?? "") as Project["routeType"],
       orangeInterventionType: isOrangeForm ? orangeInterventionType : "",
       sla: isOrangeForm ? orangeSla : "",
       departureLocality: isOrangeForm ? String(form.get("departureLocality") || "").trim() : "",
@@ -1648,9 +1648,7 @@ export default function Home() {
                 <label className="wide"><span>{isOrangeForm ? "Cod site B (opțional)" : isInstallationForm ? "Adresă instalare *" : "Adresă lucrare *"}</span><input name="address" required={!isOrangeForm} defaultValue={editingProject?.address} placeholder={isOrangeForm ? "Codul site-ului B" : "Stradă, număr, localitate"} /></label>
                 {isOrangeForm && <>
                   <label className="wide"><span>Denumirea tronsonului FO *</span><input name="foSectionName" required maxLength={200} defaultValue={editingProject?.foSectionName ?? ""} placeholder="Denumirea tronsonului FO" /></label>
-                  <label><span>Topologie tronson *</span><select name="topology" required defaultValue={editingProject?.topology ?? ""}><option value="" disabled>Selectează topologia</option><option>FO BB</option><option>FO Local VHBB</option></select></label>
-                  <label><span>Capacitate cablu *</span><input name="cableCapacity" type="number" min="1" max="10000" step="1" required defaultValue={editingProject?.cableCapacity || ""} placeholder="Număr fibre" /></label>
-                  <label><span>Tip traseu *</span><select name="routeType" required defaultValue={editingProject?.routeType ?? ""}><option value="" disabled>Selectează tipul</option><option>Aerian</option><option>Subteran</option><option>Mixt</option></select></label>
+                  <label><span>Topologie tronson *</span><select name="topology" required defaultValue={editingProject?.topology ?? ""}><option value="" disabled>Selectează topologia</option><option>FO BB</option><option>FO Local</option><option>VHBB</option></select></label>
                   <label><span>Tip intervenție *</span><select name="orangeInterventionType" required value={orangeInterventionType ?? ""} onChange={(event) => { setOrangeInterventionType(event.target.value as Project["orangeInterventionType"]); setOrangeSla(""); }}><option value="" disabled>Selectează tipul</option><option>FITT</option><option>IMO</option><option>PBM</option></select></label>
                   <label><span>SLA *</span><select name="sla" required value={orangeSla} disabled={!orangeInterventionType} onChange={(event) => setOrangeSla(event.target.value)}><option value="" disabled>{orangeInterventionType ? "Selectează SLA" : "Selectează mai întâi tipul"}</option>{orangeInterventionType && orangeSlaOptions[orangeInterventionType]?.map((option) => <option key={option}>{option}</option>)}</select></label>
                   <label className="wide"><span>Localitate plecare echipă *</span><input name="departureLocality" required maxLength={150} defaultValue={editingProject?.departureLocality ?? ""} placeholder="Localitatea de plecare" /></label>
