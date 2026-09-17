@@ -111,6 +111,8 @@ export type InterventionAssessmentSummary = {
   arrivedAt?: number;
   incidentDescription?: string;
   damageLocation?: { lat: number; lon: number; placedAt?: number };
+  cableCapacity: number;
+  routeType: "Aerian" | "Subteran" | "Mixt";
   siteMeasurement?: {
     siteCode: string;
     otdrLengthMeters: number;
