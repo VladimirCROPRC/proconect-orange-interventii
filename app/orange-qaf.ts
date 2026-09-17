@@ -119,7 +119,8 @@ function qafTicketNumber(projectId: string) {
 
 function qafJunctionNicmName(projectId: string, junctionNumber: number) {
   const ticketNumber = qafTicketNumber(projectId);
-  return `J${junctionNumber}_${/^IMO/i.test(projectId.trim()) ? "IMO" : ""}${ticketNumber}`;
+  const ticketType = /^(IMO|FITT|PBM)/i.exec(projectId.trim())?.[1]?.toUpperCase() ?? "";
+  return `J${junctionNumber}_${ticketType}${ticketNumber}`;
 }
 
 function writeNumber(xml: string, cell: string, value: number) {
