@@ -664,7 +664,12 @@ export async function saveFieldDocumentation(projectId: string, section: string,
     }
 
     const intervention = content as {
-      assessment?: { damageType?: unknown; cause?: unknown; damageLocation?: { lat?: unknown; lon?: unknown } };
+      assessment?: {
+        damageType?: unknown;
+        cause?: unknown;
+        damageLocation?: { lat?: unknown; lon?: unknown };
+        siteMeasurement?: { siteCode?: unknown; otdrLengthMeters?: unknown; photoCount?: unknown };
+      };
       execution?: Partial<InterventionExecutionSummary>;
       documentation?: Partial<InterventionDocumentationSummary>;
     };
@@ -683,12 +688,22 @@ export async function saveFieldDocumentation(projectId: string, section: string,
     }
 
     const photos = await getRawDb()
-      .prepare("SELECT geolocation FROM project_files WHERE project_id = ? AND section = ?")
+      .prepare("SELECT category, geolocation FROM project_files WHERE project_id = ? AND section = ?")
       .bind(projectId, "intervention-assessment")
-      .all<{ geolocation: string }>();
+      .all<{ category: string; geolocation: string }>();
 
-    if (!(photos.results ?? []).some((photo) => hasValidPhotoCoordinates(photo.geolocation))) {
+    if (!(photos.results ?? []).some((photo) => photo.category === "damage" && hasValidPhotoCoordinates(photo.geolocation))) {
       return { error: "Încarcă cel puțin o fotografie a avariei cu coordonate GPS valide.", status: 400 as const };
+    }
+    if (assessment.siteMeasurement) {
+      const siteCode = typeof assessment.siteMeasurement.siteCode === "string" ? assessment.siteMeasurement.siteCode.trim() : "";
+      const length = Number(assessment.siteMeasurement.otdrLengthMeters);
+      if (!siteCode || siteCode.length > 50 || !Number.isFinite(length) || length <= 0 || length > 1_000_000) {
+        return { error: "Completează codul site-ului și lungimea validă a măsurătorii OTDR.", status: 400 as const };
+      }
+      if (!(photos.results ?? []).some((photo) => photo.category === "site-measurement" && hasValidPhotoCoordinates(photo.geolocation))) {
+        return { error: "Adaugă fotografia cu GPS pentru măsurătoarea OTDR din site.", status: 400 as const };
+      }
     }
 
     if (intervention.execution) {

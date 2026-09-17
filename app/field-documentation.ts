@@ -109,6 +109,11 @@ export type InterventionAssessmentSummary = {
   damageType: InterventionDamageType;
   cause?: InterventionCause;
   damageLocation?: { lat: number; lon: number; placedAt?: number };
+  siteMeasurement?: {
+    siteCode: string;
+    otdrLengthMeters: number;
+    photoCount: number;
+  };
   photoCount: number;
   geotaggedPhotoCount: number;
   documentedAt: number;

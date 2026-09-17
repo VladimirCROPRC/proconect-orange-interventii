@@ -65,7 +65,7 @@ export async function POST(request: Request) {
       if (typeof geo !== "string" || !hasValidPhotoCoordinates(geo)) {
         return Response.json({ error: "Fotografiile intervenției necesită coordonate GPS valide." }, { status: 400 });
       }
-      if ((section === "intervention-assessment" && category !== "damage") || (section === "intervention-execution" && !/^[a-f0-9-]{36}:photo$/i.test(category))) {
+      if ((section === "intervention-assessment" && category !== "damage" && category !== "site-measurement") || (section === "intervention-execution" && !/^[a-f0-9-]{36}:photo$/i.test(category))) {
         return Response.json({ error: "Categoria fotografiei intervenției nu este validă." }, { status: 400 });
       }
     }

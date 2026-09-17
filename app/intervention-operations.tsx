@@ -88,6 +88,7 @@ function buildInterventionReport(project: ProjectRecord, summary?: InterventionF
     `Avarie constatată: ${summary?.assessment?.damageType ?? "Necompletată"}.`,
     ...(summary?.assessment?.cause ? [`Cauză: ${summary.assessment.cause}.`] : []),
     ...(summary?.assessment?.damageLocation ? [`Locația avariei: ${summary.assessment.damageLocation.lat.toFixed(6)}, ${summary.assessment.damageLocation.lon.toFixed(6)}.`] : []),
+    ...(summary?.assessment?.siteMeasurement ? [`Măsurătoare site ${summary.assessment.siteMeasurement.siteCode}: OTDR ${summary.assessment.siteMeasurement.otdrLengthMeters} m, ${summary.assessment.siteMeasurement.photoCount} foto.`] : []),
     "Operațiuni efectuate:",
     ...activityLines,
     ...(materialLines.length ? ["Materiale utilizate:", ...materialLines] : []),
@@ -141,6 +142,9 @@ export function InterventionOperationsSection({
   const [damageType, setDamageType] = useState<InterventionDamageType | "">(initialSummary?.assessment?.damageType ?? "");
   const [cause, setCause] = useState<InterventionCause | "">(initialSummary?.assessment?.cause ?? "");
   const [damageLocation, setDamageLocation] = useState(initialSummary?.assessment?.damageLocation);
+  const [siteMeasurementEnabled, setSiteMeasurementEnabled] = useState(Boolean(initialSummary?.assessment?.siteMeasurement));
+  const [siteMeasurementCode, setSiteMeasurementCode] = useState(initialSummary?.assessment?.siteMeasurement?.siteCode ?? "");
+  const [siteMeasurementLength, setSiteMeasurementLength] = useState(initialSummary?.assessment?.siteMeasurement?.otdrLengthMeters?.toString() ?? "");
   const [photos, setPhotos] = useState<StoredProjectFile[]>([]);
   const [loadingPhotos, setLoadingPhotos] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -156,6 +160,9 @@ export function InterventionOperationsSection({
       setDamageType(initialSummary?.assessment?.damageType ?? "");
       setCause(initialSummary?.assessment?.cause ?? "");
       setDamageLocation(initialSummary?.assessment?.damageLocation);
+      setSiteMeasurementEnabled(Boolean(initialSummary?.assessment?.siteMeasurement));
+      setSiteMeasurementCode(initialSummary?.assessment?.siteMeasurement?.siteCode ?? "");
+      setSiteMeasurementLength(initialSummary?.assessment?.siteMeasurement?.otdrLengthMeters?.toString() ?? "");
       setPhotos([]);
       setLoadingPhotos(true);
       setError("");
@@ -187,18 +194,25 @@ export function InterventionOperationsSection({
     };
   }, [project, initialSummary]);
 
-  const validPhotos = photos.filter((photo) => validPhotoCoordinates(photo.geo));
+  const damagePhotos = photos.filter((photo) => photo.category === "damage");
+  const validPhotos = damagePhotos.filter((photo) => validPhotoCoordinates(photo.geo));
+  const siteMeasurementPhotos = photos.filter((photo) => photo.category === "site-measurement");
+  const validSiteMeasurementPhotos = siteMeasurementPhotos.filter((photo) => validPhotoCoordinates(photo.geo));
+  const siteMeasurementLengthMeters = Number(siteMeasurementLength);
+  const siteMeasurementReady = !siteMeasurementEnabled || Boolean(siteMeasurementCode.trim())
+    && Number.isFinite(siteMeasurementLengthMeters) && siteMeasurementLengthMeters > 0
+    && validSiteMeasurementPhotos.length > 0;
   const orangeIntervention = project.activityType === "Intervenție Orange";
   const completedItems = Number(Boolean(damageType)) + Number(validPhotos.length > 0) + Number(!orangeIntervention || Boolean(damageLocation)) + Number(!orangeIntervention || Boolean(cause));
   const progress = Math.round((completedItems / (orangeIntervention ? 4 : 2)) * 100);
-  const ready = Boolean(damageType) && validPhotos.length > 0 && (!orangeIntervention || (Boolean(cause) && Boolean(damageLocation)));
+  const ready = Boolean(damageType) && validPhotos.length > 0 && siteMeasurementReady && (!orangeIntervention || (Boolean(cause) && Boolean(damageLocation)));
   const executionActivities = initialSummary?.execution?.activities ?? [];
   const totalExecutionPhotos = executionActivities.reduce((total, activity) => total + activity.photoCount, 0);
   const totalCableMeters = executionActivities.reduce((total, activity) => total + (activity.type === "fo-installation" ? activity.cableLengthMeters ?? 0 : 0), 0);
   const reportReady = report.trim().length >= 20 && report.trim().length <= 5_000;
   const canFinalize = Boolean(canEdit && initialSummary?.assessment && executionActivities.length && reportReady && project.status !== "Finalizat");
 
-  async function addPhotos(selectedFiles: File[]) {
+  async function addPhotos(selectedFiles: File[], category: "damage" | "site-measurement" = "damage") {
     if (!selectedFiles.length) return;
 
     setUploading(true);
@@ -209,15 +223,17 @@ export function InterventionOperationsSection({
         const saved = await uploadProjectFile({
           projectId: project.id,
           section: "intervention-assessment",
-          category: "damage",
+          category,
           file,
           geo,
         });
         setPhotos((current) => [...current, saved]);
       }
-      onNotify(selectedFiles.length === 1
-        ? "Fotografia avariei a fost salvată cu poziția GPS."
-        : `${selectedFiles.length} fotografii ale avariei au fost salvate cu poziția GPS.`);
+      onNotify(category === "site-measurement"
+        ? "Fotografia măsurătorii OTDR a fost salvată cu poziția GPS."
+        : selectedFiles.length === 1
+          ? "Fotografia avariei a fost salvată cu poziția GPS."
+          : `${selectedFiles.length} fotografii ale avariei au fost salvate cu poziția GPS.`);
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : "Fotografiile intervenției nu au putut fi încărcate.");
     } finally {
@@ -241,8 +257,10 @@ export function InterventionOperationsSection({
 
   async function saveAssessment(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!damageType || !validPhotos.length || (orangeIntervention && (!cause || !damageLocation))) {
-      setError(orangeIntervention ? "Selectează tipul și cauza avariei, amplasează locația pe hartă și adaugă cel puțin o fotografie cu GPS valid." : "Selectează tipul avariei și adaugă cel puțin o fotografie cu GPS valid.");
+    if (!damageType || !validPhotos.length || !siteMeasurementReady || (orangeIntervention && (!cause || !damageLocation))) {
+      setError(!siteMeasurementReady
+        ? "Completează codul site-ului, lungimea OTDR și fotografia măsurătorii cu GPS valid."
+        : orangeIntervention ? "Selectează tipul și cauza avariei, amplasează locația pe hartă și adaugă cel puțin o fotografie cu GPS valid." : "Selectează tipul avariei și adaugă cel puțin o fotografie cu GPS valid.");
       return;
     }
 
@@ -255,7 +273,12 @@ export function InterventionOperationsSection({
           damageType,
           ...(cause ? { cause } : {}),
           ...(damageLocation ? { damageLocation } : {}),
-          photoCount: photos.length,
+          ...(siteMeasurementEnabled ? { siteMeasurement: {
+            siteCode: siteMeasurementCode.trim().toLocaleUpperCase("ro-RO"),
+            otdrLengthMeters: siteMeasurementLengthMeters,
+            photoCount: siteMeasurementPhotos.length,
+          } } : {}),
+          photoCount: damagePhotos.length,
           geotaggedPhotoCount: validPhotos.length,
           documentedAt: Date.now(),
         },
@@ -397,8 +420,8 @@ export function InterventionOperationsSection({
 
               {loadingPhotos && <p className="intervention-loading">Se verifică fotografiile salvate...</p>}
 
-              {photos.length > 0 && <div className="intervention-photo-grid">
-                {photos.map((photo) => <article className="intervention-photo-item" key={photo.id}>
+              {damagePhotos.length > 0 && <div className="intervention-photo-grid">
+                {damagePhotos.map((photo) => <article className="intervention-photo-item" key={photo.id}>
                   <a href={photo.url} target="_blank" rel="noreferrer" aria-label={`Deschide fotografia ${photo.name}`}>
                     <img src={photo.url} alt={`Constatare avarie: ${photo.name}`} loading="lazy" />
                   </a>
@@ -406,6 +429,47 @@ export function InterventionOperationsSection({
                   <button type="button" onClick={() => void removePhoto(photo)} disabled={removingId === photo.id} aria-label={`Șterge fotografia ${photo.name}`}>{removingId === photo.id ? "..." : "Șterge"}</button>
                 </article>)}
               </div>}
+
+              <label className="intervention-damage-field">
+                <span>Măsurătoare site <b>DACĂ ESTE CAZUL</b></span>
+                <select value={siteMeasurementEnabled ? "yes" : "no"} onChange={(event) => setSiteMeasurementEnabled(event.target.value === "yes")}>
+                  <option value="no">Nu este cazul</option>
+                  <option value="yes">Da, există măsurătoare OTDR</option>
+                </select>
+                <small>Activează numai dacă s-a efectuat o măsurătoare din site.</small>
+              </label>
+
+              {siteMeasurementEnabled && <>
+                <label className="intervention-damage-field">
+                  <span>Cod site <b>OBLIGATORIU</b></span>
+                  <input value={siteMeasurementCode} maxLength={50} onChange={(event) => setSiteMeasurementCode(event.target.value)} placeholder="ex. CJ0123" required />
+                </label>
+                <label className="intervention-damage-field">
+                  <span>Lungime măsurătoare OTDR (m) <b>OBLIGATORIU</b></span>
+                  <input type="number" min="0.01" max="1000000" step="0.01" value={siteMeasurementLength} onChange={(event) => setSiteMeasurementLength(event.target.value)} placeholder="ex. 1250" required />
+                </label>
+                <div className="intervention-photo-heading">
+                  <div><h3>Fotografie măsurătoare site</h3><p>Fotografia ecranului sau rezultatului OTDR, cu poziție GPS.</p></div>
+                  <span>{validSiteMeasurementPhotos.length} {validSiteMeasurementPhotos.length === 1 ? "poză GPS" : "poze GPS"}</span>
+                </div>
+                <label className={`intervention-photo-upload${uploading ? " is-uploading" : ""}`}>
+                  <input type="file" accept="image/*" capture="environment" disabled={uploading} onChange={(event) => {
+                    const selectedFiles = Array.from(event.target.files ?? []);
+                    event.currentTarget.value = "";
+                    void addPhotos(selectedFiles, "site-measurement");
+                  }} />
+                  <span className="intervention-upload-icon">⌖</span>
+                  <strong>{uploading ? "Se încarcă..." : "Adaugă fotografia OTDR"}</strong>
+                  <small>Este necesară cel puțin o fotografie cu GPS valid.</small>
+                </label>
+                {siteMeasurementPhotos.length > 0 && <div className="intervention-photo-grid">
+                  {siteMeasurementPhotos.map((photo) => <article className="intervention-photo-item" key={photo.id}>
+                    <a href={photo.url} target="_blank" rel="noreferrer"><img src={photo.url} alt={`Măsurătoare OTDR: ${photo.name}`} loading="lazy" /></a>
+                    <div className="intervention-photo-meta"><strong>{photo.name}</strong><span>⌖ {photo.geo}</span><small>{formatCapturedAt(photo.capturedAt)}</small></div>
+                    <button type="button" onClick={() => void removePhoto(photo)} disabled={removingId === photo.id}>{removingId === photo.id ? "..." : "Șterge"}</button>
+                  </article>)}
+                </div>}
+              </>}
 
               {error && <p className="intervention-error" role="alert">{error}</p>}
             </div>

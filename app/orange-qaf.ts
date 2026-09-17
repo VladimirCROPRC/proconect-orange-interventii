@@ -8,6 +8,7 @@ type Material = { source?: string; code?: string; quantity?: number };
 type DamageLocation = { lat?: number; lon?: number; placedAt?: number };
 type ExecutionJunction = { lat?: number; lon?: number; kind?: string };
 type ExecutionActivity = { type?: string; junction?: ExecutionJunction };
+type SiteMeasurement = { siteCode?: string; otdrLengthMeters?: number; photoCount?: number };
 type ZipEntry = { name: string; content: Uint8Array };
 const decoder = new TextDecoder();
 const encoder = new TextEncoder();
@@ -72,12 +73,13 @@ async function orangeDocumentation(projectId: string) {
   let activities: ExecutionActivity[] = [];
   let damageLocation: DamageLocation | undefined;
   let documentedAt: number | undefined;
+  let siteMeasurement: SiteMeasurement | undefined;
   let cause = "";
   if (row.content_json) {
     try {
       const documentation = JSON.parse(row.content_json) as {
         intervention?: {
-          assessment?: { cause?: string; damageLocation?: DamageLocation; documentedAt?: number };
+          assessment?: { cause?: string; damageLocation?: DamageLocation; documentedAt?: number; siteMeasurement?: SiteMeasurement };
           execution?: { materials?: Material[]; activities?: ExecutionActivity[] };
         };
       };
@@ -85,13 +87,20 @@ async function orangeDocumentation(projectId: string) {
       activities = Array.isArray(documentation.intervention?.execution?.activities) ? documentation.intervention!.execution!.activities! : [];
       damageLocation = documentation.intervention?.assessment?.damageLocation;
       documentedAt = documentation.intervention?.assessment?.documentedAt;
+      siteMeasurement = documentation.intervention?.assessment?.siteMeasurement;
       cause = documentation.intervention?.assessment?.cause ?? "";
     } catch {
       // The ticket data remains usable even if older field documentation is malformed.
     }
   }
+  const measurementPhotos = siteMeasurement
+    ? await getRawDb().prepare(
+      "SELECT original_name FROM project_files WHERE project_id = ? AND section = 'intervention-assessment' AND category = 'site-measurement' ORDER BY created_at ASC",
+    ).bind(projectId).all<{ original_name: string }>()
+    : { results: [] as Array<{ original_name: string }> };
   return {
-    materials, damageLocation, documentedAt, cause,
+    materials, damageLocation, documentedAt, cause, siteMeasurement,
+    measurementPhotoNames: (measurementPhotos.results ?? []).map((photo) => photo.original_name).filter(Boolean),
     newJunctions: activities
       .filter((activity) => activity.type === "junction-installation" && activity.junction?.kind === "new")
       .map((activity) => activity.junction!)
@@ -101,6 +110,16 @@ async function orangeDocumentation(projectId: string) {
     topology: row.topology ?? "", cableCapacity: Number(row.cable_capacity) || 0, routeType: row.route_type ?? "",
     interventionType: row.orange_intervention_type ?? "", sla: row.sla ?? "", departureLocality: row.departure_locality ?? "",
   };
+}
+
+function qafTicketNumber(projectId: string) {
+  const match = /^(IMO|FITT|PBM)0*(\d+)$/i.exec(projectId.trim());
+  return match ? match[2] : projectId.trim();
+}
+
+function qafJunctionNicmName(projectId: string, junctionNumber: number) {
+  const ticketNumber = qafTicketNumber(projectId);
+  return `J${junctionNumber}_${/^IMO/i.test(projectId.trim()) ? "IMO" : ""}${ticketNumber}`;
 }
 
 function writeNumber(xml: string, cell: string, value: number) {
@@ -173,7 +192,7 @@ export async function buildOrangeQafXlsx(projectId: string) {
   const textCells: Array<[string, string]> = [
     ["D5", documentation.siteA], ["K5", documentation.siteB], ["D7", documentation.foSectionName],
     ["D9", documentation.topology], ["I11", documentation.routeType], ["D14", documentation.interventionType],
-    ["F14", documentation.sla], ["D15", projectId], ["D16", documentation.departureLocality], ["C23", documentation.cause],
+    ["F14", documentation.sla], ["D15", qafTicketNumber(projectId)], ["D16", documentation.departureLocality], ["C23", documentation.cause],
   ];
   for (const [cell, value] of textCells) {
     if (value) mainXml = writeText(mainXml, cell, value);
@@ -187,7 +206,15 @@ export async function buildOrangeQafXlsx(projectId: string) {
     const row = 41 + index;
     mainXml = writeNumber(mainXml, `C${row}`, Number(junction.lat!.toFixed(6)));
     mainXml = writeNumber(mainXml, `E${row}`, Number(junction.lon!.toFixed(6)));
+    mainXml = writeText(mainXml, `C${46 + index}`, qafJunctionNicmName(projectId, index + 1));
   });
+  if (documentation.siteMeasurement) {
+    const siteCode = documentation.siteMeasurement.siteCode?.trim() ?? "";
+    const length = Number(documentation.siteMeasurement.otdrLengthMeters);
+    if (siteCode) mainXml = writeText(mainXml, "C56", siteCode);
+    if (Number.isFinite(length) && length > 0) mainXml = writeText(mainXml, "I56", `${Number(length.toFixed(2))} m`);
+    if (documentation.measurementPhotoNames.length) mainXml = writeText(mainXml, "K56", documentation.measurementPhotoNames.join(", "));
+  }
   if (placed) {
     for (const row of [19, 20]) {
       mainXml = writeNumber(mainXml, `C${row}`, placed.day);
