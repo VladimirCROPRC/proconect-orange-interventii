@@ -582,7 +582,7 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
     }
     setSavingMaterials(true);
     try {
-      await onSaved({ ...initialSummary, execution: { activities, materials, documentedAt: Date.now() } });
+      await onSaved({ ...initialSummary, execution: { activities, materials, remediationDescription, documentedAt: Date.now() } });
       onNotify("Materialele utilizate au fost salvate.");
     } catch (failure) {
       onNotify(failure instanceof Error ? failure.message : "Materialele nu au putut fi salvate.");
@@ -764,7 +764,7 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
       </div>
     </section>
 
-    {blankMap && false && <section className="project-card intervention-records-card">
+    {blankMap && <section className="project-card intervention-records-card">
       <div className="card-heading"><div><h2>Materiale utilizate</h2><p>Alege materialele Orange și materialele Proconect consumate la intervenție.</p></div></div>
       <div className="intervention-activity-form-body">
         <div className="intervention-route-toolbar"><button type="button" className={materialSource === "orange" ? "active" : ""} onClick={() => { setMaterialSource("orange"); setMaterialCode(""); }}>Materiale Orange</button><button type="button" className={materialSource === "proconect" ? "active" : ""} onClick={() => { setMaterialSource("proconect"); setMaterialCode(""); }}>Materiale Proconect</button></div>
