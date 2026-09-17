@@ -8,7 +8,7 @@ Aplicație internă separată pentru administrarea și documentarea intervenții
 - Flux complet de constatare, execuție, materiale, fotografii și documentare.
 - Hărți OpenStreetMap, localizarea avariei și punctele activităților.
 - Generare QAF, rapoarte și fișe de materiale.
-- Arhivare OneDrive și înscriere automată a tichetelor în Excel Online.
+- Centralizator Excel în Google Drive, actualizat automat în tabelul `Table1` din foaia `Tichete corective Orange`.
 - Acces separat pentru administratori, coordonatori și tehnicieni.
 - Izolare la nivel de API, bază de date și teste automate: sunt acceptate exclusiv intervențiile Orange FITT, IMO și PBM.
 - Registrul de hartă inclus pornește gol; importați numai date aprobate pentru rețeaua Orange.
@@ -23,6 +23,6 @@ Aplicație internă separată pentru administrarea și documentarea intervenții
 6. Comanda de build: `npm run build`.
 7. Comanda de deploy: `npx wrangler d1 migrations apply proconect-orange-interventii-db --remote && npx wrangler deploy --config wrangler.jsonc`.
 8. Configurează aplicația Microsoft Entra și conectează OneDrive din Administrare, conform `docs/ONEDRIVE_SETUP.md`.
-9. Configurează URL-ul workbook-ului Excel Online în secțiunea OneDrive.
+9. Conectează Google Drive din Administrare. Aplicația creează și înlocuiește automat `Centralizator ENO3 Y4.xlsx` în folderul `Interventii Orange`; OneDrive nu este necesar pentru această funcție.
 
 Nu adăuga parole, tokenuri, fotografii ale clienților sau exporturi ale bazei de date în repository.

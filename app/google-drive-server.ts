@@ -7,6 +7,7 @@ import { bucket, getFileRow, readReport } from "./project-server";
 import { buildAcceptanceReportDocx } from "./report-docx";
 import { buildMaterialSheetPdf } from "./material-pdf";
 import { buildOrangeQafXlsx } from "./orange-qaf";
+import { buildOrangeCentralizerXlsx } from "./orange-centralizer";
 
 type DriveEnvironment = { PROCONECT_DRIVE_ENCRYPTION_KEY?: string };
 type DriveSettingsRow = {
@@ -366,6 +367,42 @@ async function uploadOrangeQaf(projectId: string, folderId: string) {
   );
 }
 
+export async function mirrorOrangeTicketWorkbook(content: ArrayBuffer, filename = "Centralizator ENO3 Y4.xlsx") {
+  if (!usesGoogle(await backupMode())) return false;
+  const configuration = await settings();
+  if (!isConnected(configuration) || !configuration) return false;
+  const activityFolders = await ensureActivityFolders(configuration.root_folder_id);
+  const destination = activityFolders["Intervenție Orange"];
+  if (!destination?.id) throw new Error("Folderul Google Drive Interventii Orange nu este disponibil.");
+  await uploadDriveFile(
+    filename,
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    content,
+    destination.id,
+    "Centralizator Orange sincronizat automat din Excel Online",
+    await findDriveFileByName(destination.id, filename),
+  );
+  return true;
+}
+
+async function syncOrangeCentralizer() {
+  const configuration = await settings();
+  if (!isConnected(configuration) || !configuration) return false;
+  const activityFolders = await ensureActivityFolders(configuration.root_folder_id);
+  const destination = activityFolders["Intervenție Orange"];
+  if (!destination?.id) throw new Error("Folderul Google Drive Interventii Orange nu este disponibil.");
+  const filename = "Centralizator ENO3 Y4.xlsx";
+  await uploadDriveFile(
+    filename,
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    await buildOrangeCentralizerXlsx(),
+    destination.id,
+    "Centralizator Orange generat și actualizat automat de aplicație",
+    await findDriveFileByName(destination.id, filename),
+  );
+  return true;
+}
+
 function readableOrangeName(value: string) {
   return value.normalize("NFC").replace(/[\u0000-\u001f"*:<>?\/\\|#%]/g, "_").replace(/^[. ]+|[. ]+$/g, "").slice(0, 140) || "Tichet Orange";
 }
@@ -375,7 +412,10 @@ export async function syncProjectIfConnected(projectId: string) {
   if (!isConnected(await settings())) return false;
   const folders = await ensureProjectFolder(projectId);
   const project = await getRawDb().prepare("SELECT activity_type FROM projects WHERE id = ? LIMIT 1").bind(projectId).first<{ activity_type: ProjectActivityType }>();
-  if (project?.activity_type === "Intervenție Orange") await uploadOrangeQaf(projectId, folders.folder_id);
+  if (project?.activity_type === "Intervenție Orange") {
+    await uploadOrangeQaf(projectId, folders.folder_id);
+    await syncOrangeCentralizer();
+  }
   return true;
 }
 
@@ -446,6 +486,7 @@ export async function syncReportIfConnected(projectId: string) {
   const project = await getRawDb().prepare("SELECT activity_type FROM projects WHERE id = ? LIMIT 1").bind(projectId).first<{ activity_type: ProjectActivityType }>();
   if (project?.activity_type === "Intervenție Orange") {
     await uploadOrangeQaf(projectId, folders.folder_id);
+    await syncOrangeCentralizer();
     return true;
   }
   if (!saved) return false;
