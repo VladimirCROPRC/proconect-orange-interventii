@@ -2,7 +2,7 @@ import type { ProjectFieldDocumentation } from "./field-documentation";
 
 export type ProjectActivityType = "Instalare" | "Intervenție" | "Intervenție Orange" | "Survey";
 export type MediaConverterType = "" | "100 Mbps" | "1 Gbps" | "JumboFrame";
-export type OrangeTopology = "" | "FO BB" | "FO Local VHBB";
+export type OrangeTopology = "" | "FO BB" | "FO Local" | "VHBB";
 export type OrangeRouteType = "" | "Aerian" | "Subteran" | "Mixt";
 export type OrangeInterventionType = "" | "FITT" | "IMO" | "PBM";
 
