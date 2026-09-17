@@ -683,7 +683,7 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
         <div className="splice-map-head intervention-map-head"><div><small>MOD ACTIV</small><strong>{draft?.type ? activityCatalog[draft.type].title : "Puncte și activități ale intervenției"}</strong></div>
           <div className="intervention-map-actions">
             {!blankMap && draft?.type !== "junction-installation" && draft?.type !== "chamber-installation" && <button type="button" className={mode === "documented" ? "active" : ""} onClick={() => setMode("documented")} disabled={!draft?.type}>J documentată</button>}
-            <button type="button" className={mode === "undocumented" ? "active" : ""} onClick={() => setMode("undocumented")} disabled={!draft?.type}>J fără cod</button>
+            {!blankMap && <button type="button" className={mode === "undocumented" ? "active" : ""} onClick={() => setMode("undocumented")} disabled={!draft?.type}>J fără cod</button>}
             {draft?.type === "fo-installation" && <button type="button" className={mode === "draw" ? "active" : ""} onClick={() => setMode("draw")}>Trasează</button>}
             <button type="button" className="fo-fullscreen-toggle" onClick={mapFullscreen.toggleFullscreen} aria-pressed={mapFullscreen.fullscreen}>{mapFullscreen.fullscreen ? "× Închide" : "⛶ Ecran complet"}</button>
           </div>
@@ -711,7 +711,7 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
           })}
           {currentLocation && (() => { const point = screenPoint(currentLocation, center, zoom); return <span className="splice-current-location" style={{ left: `${point.x / MAP_WIDTH * 100}%`, top: `${point.y / MAP_HEIGHT * 100}%` }}><i /><small>LOCAȚIA MEA</small></span>; })()}
 
-          <div className="fo-map-instruction"><span>{mode === "draw" ? "⌁" : mode === "pan" ? "✥" : activeSlot.toUpperCase().slice(0, 1)}</span>{mapInstruction}</div>
+          {!blankMap && <div className="fo-map-instruction"><span>{mode === "draw" ? "⌁" : mode === "pan" ? "✥" : activeSlot.toUpperCase().slice(0, 1)}</span>{mapInstruction}</div>}
           {draft?.type === "fo-installation" && <div className="fo-route-live-distance" aria-live="polite"><small>LUNGIME TRASEU</small><strong>{Math.round(mappedDistance).toLocaleString("ro-RO")} m</strong></div>}
           <button type="button" className={`fo-locate-button splice-locate-button ${currentLocation ? "located" : ""}`} onClick={(event) => { event.stopPropagation(); locate(); }} disabled={gpsLoading}><span className={gpsLoading ? "loading" : ""}>{gpsLoading ? "↻" : currentLocation ? "✓" : "⌖"}</span><div><strong>{gpsLoading ? "Se caută poziția…" : currentLocation ? "Locație identificată" : "Locația mea"}</strong><small>{currentLocation ? `Precizie ±${Math.round(currentLocation.accuracy)} m` : "Centrează harta intervenției"}</small></div></button>
           <div className="fo-zoom" onClick={(event) => event.stopPropagation()}><button type="button" onClick={() => setZoom((value) => clamp(value + 1, 7, 25))}>＋</button><button type="button" onClick={() => setZoom((value) => clamp(value - 1, 7, 25))}>−</button></div>
