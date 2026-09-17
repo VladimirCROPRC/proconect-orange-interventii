@@ -94,6 +94,8 @@ function buildInterventionReport(project: ProjectRecord, summary?: InterventionF
     `Avarie constatată: ${summary?.assessment?.damageType ?? "Necompletată"}.`,
     ...(summary?.assessment?.cause ? [`Cauză: ${summary.assessment.cause}.`] : []),
     ...(summary?.assessment?.damageLocation ? [`Locația avariei: ${summary.assessment.damageLocation.lat.toFixed(6)}, ${summary.assessment.damageLocation.lon.toFixed(6)}.`] : []),
+    ...(summary?.assessment?.cableCapacity ? [`Capacitate cablu: ${summary.assessment.cableCapacity} fibre.`] : []),
+    ...(summary?.assessment?.routeType ? [`Tip traseu: ${summary.assessment.routeType}.`] : []),
     ...(summary?.assessment?.siteMeasurement ? [`Măsurătoare site ${summary.assessment.siteMeasurement.siteCode}: OTDR ${summary.assessment.siteMeasurement.otdrLengthMeters} m, ${summary.assessment.siteMeasurement.photoCount} foto.`] : []),
     "Operațiuni efectuate:",
     ...activityLines,
@@ -150,6 +152,8 @@ export function InterventionOperationsSection({
   const [arrivedAt, setArrivedAt] = useState(initialSummary?.assessment?.arrivedAt);
   const [incidentDescription, setIncidentDescription] = useState(initialSummary?.assessment?.incidentDescription ?? "");
   const [damageLocation, setDamageLocation] = useState(initialSummary?.assessment?.damageLocation);
+  const [cableCapacity, setCableCapacity] = useState(initialSummary?.assessment?.cableCapacity?.toString() ?? (project.cableCapacity ? String(project.cableCapacity) : ""));
+  const [routeType, setRouteType] = useState<ProjectRecord["routeType"]>(initialSummary?.assessment?.routeType ?? project.routeType ?? "");
   const [siteMeasurementEnabled, setSiteMeasurementEnabled] = useState(Boolean(initialSummary?.assessment?.siteMeasurement));
   const [siteMeasurementCode, setSiteMeasurementCode] = useState(initialSummary?.assessment?.siteMeasurement?.siteCode ?? "");
   const [siteMeasurementLength, setSiteMeasurementLength] = useState(initialSummary?.assessment?.siteMeasurement?.otdrLengthMeters?.toString() ?? "");
@@ -178,6 +182,8 @@ export function InterventionOperationsSection({
       setArrivedAt(initialSummary?.assessment?.arrivedAt);
       setIncidentDescription(initialSummary?.assessment?.incidentDescription ?? "");
       setDamageLocation(initialSummary?.assessment?.damageLocation);
+      setCableCapacity(initialSummary?.assessment?.cableCapacity?.toString() ?? (project.cableCapacity ? String(project.cableCapacity) : ""));
+      setRouteType(initialSummary?.assessment?.routeType ?? project.routeType ?? "");
       setSiteMeasurementEnabled(Boolean(initialSummary?.assessment?.siteMeasurement));
       setSiteMeasurementCode(initialSummary?.assessment?.siteMeasurement?.siteCode ?? "");
       setSiteMeasurementLength(initialSummary?.assessment?.siteMeasurement?.otdrLengthMeters?.toString() ?? "");
@@ -220,6 +226,8 @@ export function InterventionOperationsSection({
   const validPhotos = damagePhotos.filter((photo) => validPhotoCoordinates(photo.geo));
   const siteMeasurementPhotos = photos.filter((photo) => photo.category === "site-measurement");
   const validSiteMeasurementPhotos = siteMeasurementPhotos.filter((photo) => validPhotoCoordinates(photo.geo));
+  const assessedCableCapacity = Number(cableCapacity);
+  const cableDetailsReady = Number.isInteger(assessedCableCapacity) && assessedCableCapacity >= 1 && assessedCableCapacity <= 10000 && Boolean(routeType);
   const siteMeasurementLengthMeters = Number(siteMeasurementLength);
   const siteMeasurementReady = !siteMeasurementEnabled || Boolean(siteMeasurementCode.trim())
     && Number.isFinite(siteMeasurementLengthMeters) && siteMeasurementLengthMeters > 0
@@ -279,9 +287,10 @@ export function InterventionOperationsSection({
 
   async function saveAssessment(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!damageType || !arrivedAt || !incidentDescription.trim() || !validPhotos.length || !siteMeasurementReady || (orangeIntervention && (!cause || !damageLocation))) {
+    if (!damageType || !arrivedAt || !incidentDescription.trim() || !validPhotos.length || !siteMeasurementReady || (orangeIntervention && (!cause || !damageLocation || !cableDetailsReady))) {
       setError(!siteMeasurementReady
         ? "Completează codul site-ului, lungimea OTDR și fotografia măsurătorii cu GPS valid."
+        : !cableDetailsReady ? "Completează capacitatea cablului și tipul traseului constatate în teren."
         : orangeIntervention ? "Selectează tipul și cauza avariei, amplasează locația pe hartă și adaugă cel puțin o fotografie cu GPS valid." : "Selectează tipul avariei și adaugă cel puțin o fotografie cu GPS valid.");
       return;
     }
@@ -297,6 +306,8 @@ export function InterventionOperationsSection({
           ...(arrivedAt ? { arrivedAt } : {}),
           incidentDescription: incidentDescription.trim(),
           ...(damageLocation ? { damageLocation } : {}),
+          cableCapacity: assessedCableCapacity,
+          routeType: routeType!,
           ...(siteMeasurementEnabled ? { siteMeasurement: {
             siteCode: siteMeasurementCode.trim().toLocaleUpperCase("ro-RO"),
             otdrLengthMeters: siteMeasurementLengthMeters,
@@ -468,6 +479,24 @@ export function InterventionOperationsSection({
                   <small>Alege cauza constatată în teren.</small>
                 </label>
               )}
+
+              {orangeIntervention && <div className="intervention-site-measurement" style={{ order: -2 }}>
+                <label className="intervention-damage-field">
+                  <span>Capacitate cablu <b>OBLIGATORIU</b></span>
+                  <input type="number" min="1" max="10000" step="1" inputMode="numeric" value={cableCapacity} onChange={(event) => setCableCapacity(event.target.value)} placeholder="Număr fibre" required />
+                  <small>Capacitatea identificată de tehnician în teren.</small>
+                </label>
+                <label className="intervention-damage-field">
+                  <span>Tip traseu <b>OBLIGATORIU</b></span>
+                  <select value={routeType ?? ""} onChange={(event) => setRouteType(event.target.value as ProjectRecord["routeType"])} required>
+                    <option value="">Selectează tipul</option>
+                    <option value="Aerian">Aerian</option>
+                    <option value="Subteran">Subteran</option>
+                    <option value="Mixt">Mixt</option>
+                  </select>
+                  <small>Tipul traseului constatat la localizarea avariei.</small>
+                </label>
+              </div>}
 
               {orangeIntervention && <DamageLocationPicker value={damageLocation} onChange={(location) => setDamageLocation({ ...location, placedAt: Date.now() })} onNotify={onNotify} />}
 
