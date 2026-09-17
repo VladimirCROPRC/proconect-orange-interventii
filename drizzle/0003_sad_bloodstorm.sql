@@ -1,0 +1,1 @@
+ALTER TABLE `projects` ADD `activity_type` text DEFAULT 'Instalare' NOT NULL;

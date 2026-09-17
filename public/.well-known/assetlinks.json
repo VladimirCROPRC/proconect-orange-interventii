@@ -1,0 +1,26 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "dev.workers.vladimir_carlan.proconect_b2b.twa",
+      "sha256_cert_fingerprints": [
+        "B3:47:E7:07:2A:61:E8:32:73:FC:3A:60:48:4F:9A:B3:C2:C5:5C:8B:56:99:F0:1B:34:4A:1B:60:71:94:45:65"
+      ]
+    }
+  },
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "online.proconect.twa",
+      "sha256_cert_fingerprints": [
+        "4F:CE:65:D4:04:A6:10:31:4B:D0:40:EF:9F:77:D0:52:81:0D:C9:35:5E:F9:15:D2:5A:4B:76:02:A6:AB:B3:92"
+      ]
+    }
+  }
+]

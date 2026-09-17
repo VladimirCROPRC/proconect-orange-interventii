@@ -1,0 +1,34 @@
+name: Verify OneDrive integration
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: onedrive-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.19.0'
+          cache: npm
+      - run: npm ci
+      - name: OneDrive unit and mocked integration tests
+        run: node --test tests/onedrive.test.mjs
+      - name: Validate all SQLite migrations
+        run: python3 scripts/test-migrations.py
+      - name: TypeScript
+        run: |
+          npx wrangler types
+          npx tsc --noEmit
+      - name: Lint
+        run: npm run lint
+      - name: Production build (no deployment)
+        run: npm run build
