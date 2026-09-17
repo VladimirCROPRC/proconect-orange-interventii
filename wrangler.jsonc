@@ -11,6 +11,11 @@
 	"observability": {
 		"enabled": true
 	},
+	
+	"vars": {
+  "PROCONECT_APP_URL": "https://orange.proconect.online"
+},
+
 	"d1_databases": [
 		{
 			"binding": "DB",
