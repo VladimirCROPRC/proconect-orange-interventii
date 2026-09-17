@@ -4,6 +4,7 @@ import { requiredInterventionCablePhotos, type InterventionDocumentationSummary,
 import { initialCpeCatalog, initialFieldDocumentation, initialProjects, type CpeCatalogItem, type ProjectActivityType, type ProjectRecord } from "./project-data";
 import type { AuthenticatedAccount } from "./server-auth";
 import { orangeServicePackages } from "./orange-services";
+import { buildInterventionConsumptionStatements } from "./inventory-server";
 
 type ProjectRow = {
   id: string;
@@ -853,9 +854,13 @@ export async function saveFieldDocumentation(projectId: string, section: string,
     .bind(projectId, JSON.stringify(next), account.username, now);
 
   if (finalizedProject) {
+    const materials = next.intervention?.execution?.materials ?? [];
+    const consumption = await buildInterventionConsumptionStatements(projectId, project.technician_username, materials, account, now);
+    if ("error" in consumption) return consumption;
     await getRawDb().batch([
       saveDocumentation,
       getRawDb().prepare("UPDATE projects SET status = ?, updated_at = ? WHERE id = ?").bind("Finalizat", now, projectId),
+      ...consumption.statements,
     ]);
     await refreshGeneratedReport(projectId, next, project, account);
     return { documentation: next, project: finalizedProject };
