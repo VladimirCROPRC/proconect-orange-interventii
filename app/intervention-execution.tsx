@@ -636,10 +636,20 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
 
   function junctionPanel(slot: JunctionSlot, title: string, junction: DraftJunction | null) {
     const selected = activeSlot === slot;
+    const pointLabel = draft?.type === "chamber-installation"
+      ? "Cameretă nouă"
+      : draft?.type === "diagnostics"
+        ? "Punct îndreptare cablu la cald"
+        : draft?.type === "splice-repair"
+          ? "Punct refacere sudură"
+          : junction?.kind === "new"
+            ? "Joncțiune nouă"
+            : "Joncțiune nedocumentată";
+    const pointBadge = draft?.type === "chamber-installation" ? "CM" : draft?.type === "diagnostics" ? "IC" : draft?.type === "splice-repair" ? "SU" : slot === "a" ? "A" : slot === "b" ? "B" : "J";
     return <article className={`intervention-junction-panel${selected ? " selected" : ""}`}>
       <button type="button" className="intervention-junction-select" onClick={() => { setActiveSlot(slot); if (mode === "draw") setMode("documented"); }}>
-        <span>{slot === "a" ? "A" : slot === "b" ? "B" : "J"}</span>
-        <div><small>{title}</small><strong>{junction ? junction.documented ? `${junction.code} · ${junction.name}` : junction.kind === "new" ? "Joncțiune nouă" : "Joncțiune nedocumentată" : "Alege punctul pe hartă"}</strong></div>
+        <span>{pointBadge}</span>
+        <div><small>{title}</small><strong>{junction ? junction.documented ? `${junction.code} · ${junction.name}` : pointLabel : "Alege punctul pe hartă"}</strong></div>
         <b>{readyJunction(junction) ? "✓" : "○"}</b>
       </button>
       {junction && <><p className="intervention-junction-coordinates">⌖ {junction.lat.toFixed(6)}, {junction.lon.toFixed(6)}</p><div className="splice-junction-links"><button type="button" onClick={() => { setCenter({ lat: junction.lat, lon: junction.lon }); setZoom((current) => Math.max(current, 18)); }}>Arată punctul pe hartă</button>{junction.documented && <a href={googleMapsUrl(junction)} target="_blank" rel="noreferrer">Google Maps ↗</a>}</div></>}
@@ -701,7 +711,7 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
 
           {!blankMap && visibleSites.map(({ site, point }) => <button type="button" className={`fo-site-marker ${mapSiteMarkerClass(site.code)}${draft?.endpointA?.id === site.id || draft?.endpointB?.id === site.id || draft?.junction?.id === site.id || previewJunction?.id === site.id ? " selected" : ""}`} key={site.id} title={`${site.code} · ${site.name}`} aria-label={`Alege ${site.code} ${site.name}`} style={{ left: `${point.x / MAP_WIDTH * 100}%`, top: `${point.y / MAP_HEIGHT * 100}%` }} onClick={(event) => { event.stopPropagation(); pickDocumented(site); }}><i /></button>)}
 
-          {savedJunctions.map((junction) => { const point = screenPoint(junction, center, zoom); return <button type="button" key={junction.id} className="fo-site-marker intervention-field-marker" title={`${junction.kind === "new" ? "Joncțiune nouă" : "Joncțiune existentă"} · ${junction.network === "mobile" ? "Orange Mobil" : "Orange Fixed"}`} style={{ left: `${point.x / MAP_WIDTH * 100}%`, top: `${point.y / MAP_HEIGHT * 100}%` }} onClick={(event) => { event.stopPropagation(); if (draft?.type === "junction-installation" || draft?.type === "chamber-installation") return; updateJunction(draft?.type === "fo-installation" ? activeSlot : "junction", { ...junction, network: junction.network ?? "" }); }}><i /></button>; })}
+          {savedJunctions.map((junction) => { const point = screenPoint(junction, center, zoom); return <button type="button" key={junction.id} className="fo-site-marker intervention-field-marker" title={`Punct salvat · ${junction.lat.toFixed(6)}, ${junction.lon.toFixed(6)}`}} style={{ left: `${point.x / MAP_WIDTH * 100}%`, top: `${point.y / MAP_HEIGHT * 100}%` }} onClick={(event) => { event.stopPropagation(); if (draft?.type === "junction-installation" || draft?.type === "chamber-installation") return; updateJunction(draft?.type === "fo-installation" ? activeSlot : "junction", { ...junction, network: junction.network ?? "" }); }}><i /></button>; })}
 
           {previewJunction && !draft?.endpointA && !draft?.endpointB && !draft?.junction && (() => { const point = screenPoint(previewJunction, center, zoom); return <span className="fo-placed-dot junction-dot" aria-label="Joncțiune găsită" style={{ left: `${point.x / MAP_WIDTH * 100}%`, top: `${point.y / MAP_HEIGHT * 100}%` }} />; })()}
           {draft?.routePoints.map((point, index) => { const position = screenPoint(point, center, zoom); return <span className="fo-route-point" key={`${point.lat}-${point.lon}-${index}`} style={{ left: `${position.x / MAP_WIDTH * 100}%`, top: `${position.y / MAP_HEIGHT * 100}%` }}>{index + 1}</span>; })}
@@ -777,7 +787,7 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
     </section>}
 
     <section className="project-card intervention-records-card"><div className="card-heading"><div><h2>Activități salvate</h2><p>{activities.length ? `${activities.length} ${activities.length === 1 ? "activitate documentată" : "activități documentate"} pentru tichetul ${project.id}.` : "Nicio activitate salvată pentru această intervenție."}</p></div></div>
-      {activities.length > 0 && <div className="intervention-records-list">{activities.map((activity) => <article key={activity.id}><span>{activityCatalog[activity.type].badge}</span><div><strong>{activityCatalog[activity.type].title}</strong><small>{activity.type === "fo-installation" ? `${activity.endpointA?.code ?? "Joncțiunea A"} → ${activity.endpointB?.code ?? "Joncțiunea B"} · ${activity.cableType} · ${activity.cableLengthMeters} m` : `${activity.type === "chamber-installation" ? "Cameretă nouă" : activity.junction?.documented ? activity.junction.code : "Joncțiune nedocumentată"}${activity.junction?.network ? ` · ${activity.junction.network === "mobile" ? "Orange Mobil" : "Orange Fixed"}` : ""}`}</small></div><b>{activity.photoCount}/{activity.requiredPhotoCount} foto GPS</b><button type="button" className="record-delete-button" onClick={() => void deleteSavedActivity(activity)} disabled={Boolean(deletingActivity)}>{deletingActivity === activity.id ? "Se șterge…" : "Șterge"}</button></article>)}</div>}
+      {activities.length > 0 && <div className="intervention-records-list">{activities.map((activity) => <article key={activity.id}><span>{activityCatalog[activity.type].badge}</span><div><strong>{activityCatalog[activity.type].title}</strong><small>{activity.type === "fo-installation" ? `${activity.endpointA?.code ?? "Joncțiunea A"} → ${activity.endpointB?.code ?? "Joncțiunea B"} · ${activity.cableType} · ${activity.cableLengthMeters} m` : `${activity.type === "chamber-installation" ? "Cameretă nouă" : activity.type === "diagnostics" ? "Punct îndreptare cablu la cald" : activity.type === "splice-repair" ? "Punct refacere sudură" : activity.junction?.documented ? activity.junction.code : "Joncțiune nouă"}${activity.junction?.network ? ` · ${activity.junction.network === "mobile" ? "Orange Mobil" : "Orange Fixed"}` : ""}`}</small></div><b>{activity.photoCount}/{activity.requiredPhotoCount} foto GPS</b><button type="button" className="record-delete-button" onClick={() => void deleteSavedActivity(activity)} disabled={Boolean(deletingActivity)}>{deletingActivity === activity.id ? "Se șterge…" : "Șterge"}</button></article>)}</div>}
     </section>
   </div>;
 }
