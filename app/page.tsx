@@ -8,7 +8,6 @@ import { InterventionOperationsSection } from "./intervention-operations";
 import { ProjectDocumentsSection } from "./project-documents";
 import { GoogleDriveSettings, type GoogleDriveStatus } from "./google-drive-settings";
 import { OneDriveSettings } from "./onedrive-settings";
-import { MapSitesSettings } from "./map-sites-settings";
 import { TechnicianMap } from "./technician-map";
 import { fetchProjectFiles, formatCapturedAt, uploadProjectFile } from "./client-storage";
 import { initialCpeCatalog, type CpeCatalogItem, type ProjectActivityType, type ProjectRecord } from "./project-data";
@@ -1627,7 +1626,6 @@ export default function Home() {
           onSaved={saveInterventionSummary}
         />}
         {view === "map" && currentAccount.role === "Tehnician" && <TechnicianMap />}
-        {view === "drive" && authenticatedAccount?.role === "Admin" && <MapSitesSettings onNotify={showToast} />}
         {view === "drive" && authenticatedAccount?.role === "Admin" && <GoogleDriveSettings initialStatus={driveStatus} onStatusChange={setDriveStatus} onNotify={showToast} />}
         {view === "drive" && authenticatedAccount?.role === "Admin" && <OneDriveSettings />}
         {view === "route" && <FoRouteSection project={activeProject} initialSummary={activeFieldDocumentation.route} onNotify={showToast} onSaved={saveRouteSummary} />}
