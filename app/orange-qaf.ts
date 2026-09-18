@@ -64,10 +64,10 @@ function writeQuantity(xml: string, cell: string, quantity: number) {
 
 async function orangeDocumentation(projectId: string) {
   const row = await getRawDb().prepare(
-    "SELECT projects.client, projects.address, projects.fo_section_name, projects.topology, projects.cable_capacity, projects.route_type, projects.orange_intervention_type, projects.sla, projects.departure_locality, projects.status, projects.updated_at, project_field_documentation.content_json, project_field_documentation.updated_at AS documentation_updated_at FROM projects LEFT JOIN project_field_documentation ON project_field_documentation.project_id = projects.id WHERE projects.id = ? LIMIT 1",
+    "SELECT projects.client, projects.address, projects.fo_section_name, projects.topology, projects.cable_capacity, projects.route_type, projects.orange_intervention_type, projects.sla, projects.departure_locality, projects.scheduled_label, projects.status, projects.updated_at, project_field_documentation.content_json, project_field_documentation.updated_at AS documentation_updated_at FROM projects LEFT JOIN project_field_documentation ON project_field_documentation.project_id = projects.id WHERE projects.id = ? LIMIT 1",
   ).bind(projectId).first<{
     client: string; address: string; fo_section_name: string; topology: string; cable_capacity: number;
-    route_type: string; orange_intervention_type: string; sla: string; departure_locality: string; status: string; updated_at: number;
+    route_type: string; orange_intervention_type: string; sla: string; departure_locality: string; scheduled_label: string; status: string; updated_at: number;
     content_json: string | null; documentation_updated_at: number | null;
   }>();
   if (!row) return null;
@@ -134,7 +134,7 @@ async function orangeDocumentation(projectId: string) {
       .slice(0, 4),
     siteA: row.client ?? "", siteB: row.address ?? "", foSectionName: row.fo_section_name ?? "",
     topology: row.topology ?? "", cableCapacity: assessedCableCapacity || Number(row.cable_capacity) || 0, routeType: assessedRouteType || row.route_type || "",
-    interventionType: row.orange_intervention_type ?? "", sla: row.sla ?? "", departureLocality: row.departure_locality ?? "",
+    interventionType: row.orange_intervention_type ?? "", sla: row.sla ?? "", departureLocality: row.departure_locality ?? "", requestDate: row.scheduled_label ?? "",
   };
 }
 
@@ -234,6 +234,18 @@ function manualClosingPlacement(date: string, time: string, fallback: ReturnType
     : fallback;
 }
 
+function manualDatePlacement(date: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  return parsed.getUTCFullYear() === year && parsed.getUTCMonth() === month - 1 && parsed.getUTCDate() === day
+    ? { day, month, year, time: "" }
+    : null;
+}
+
 /** Builds the approved QAF and fills only the material quantity cells selected by the technician. */
 export async function buildOrangeQafXlsx(projectId: string) {
   const assets = (env as unknown as AssetEnvironment).ASSETS;
@@ -278,6 +290,7 @@ export async function buildOrangeQafXlsx(projectId: string) {
   const helper = files.find((file) => file.name === "xl/worksheets/sheet6.xml");
   if (!helper) throw new Error("Șablonul QAF Orange nu conține formulele auxiliare.");
   const location = documentation.damageLocation;
+  const requested = manualDatePlacement(documentation.requestDate);
   const arrived = localPlacement(documentation.arrivedAt);
   const located = localPlacement(location?.placedAt ?? documentation.documentedAt);
   const validationDate = localPlacement(documentation.validatedAt);
@@ -320,12 +333,12 @@ export async function buildOrangeQafXlsx(projectId: string) {
     if (Number.isFinite(length) && length > 0) mainXml = writeText(mainXml, "I56", `${Number(length.toFixed(2))} m`);
     if (documentation.measurementPhotoNames.length) mainXml = writeText(mainXml, "K56", documentation.measurementPhotoNames.join(", "));
   }
-  for (const [row, timestamp] of [[19, arrived], [20, located], [21, finalized]] as const) {
+  for (const [row, timestamp] of [[18, requested], [19, arrived], [20, located], [21, finalized]] as const) {
     if (!timestamp) continue;
     mainXml = writeNumber(mainXml, `C${row}`, timestamp.day);
     mainXml = writeNumber(mainXml, `D${row}`, timestamp.month);
     mainXml = writeNumber(mainXml, `E${row}`, timestamp.year);
-    mainXml = writeText(mainXml, `G${row}`, timestamp.time);
+    if (timestamp.time) mainXml = writeText(mainXml, `G${row}`, timestamp.time);
   }
   if (validationDate) {
     mainXml = writeCachedValuePreservingFormula(mainXml, "C79", String(validationDate.day));
