@@ -77,8 +77,8 @@ test("QAF records the coordinator who validates the intervention", async () => {
   const qaf = await source("app/orange-qaf.ts");
   assert.match(qaf, /validatedBy/);
   assert.match(qaf, /\["C77", documentation\.validatedBy\]/);
-  assert.match(qaf, /writeCachedValuePreservingFormula\(mainXml, "C79", String\(finalized\.day\)\)/);
-  assert.match(qaf, /writeCachedValuePreservingFormula\(mainXml, "F79", validationDate, "string"\)/);
+  assert.match(qaf, /writeCachedValuePreservingFormula\(mainXml, "C79", String\(validationDate\.day\)\)/);
+  assert.match(qaf, /writeCachedValuePreservingFormula\(mainXml, "F79", formattedValidationDate, "string"\)/);
   assert.doesNotMatch(qaf, /writeFormula\(mainXml, "F79"/);
   assert.match(qaf, /validatedBy \? row\.documentation_updated_at \?\? row\.updated_at/);
   const cachedWriter = qaf.slice(qaf.indexOf("function writeCachedValuePreservingFormula"), qaf.indexOf("function normalizeCoordinateHelper"));
@@ -95,16 +95,33 @@ test("QAF preserves the original workbook hyperlink formulas", async () => {
   assert.match(qaf, /fullCalcOnLoad="1"/);
 });
 
-test("manual closing time feeds QAF and both centralizers", async () => {
+test("manual closing date and time feed QAF and both centralizers", async () => {
   const operations = await source("app/intervention-operations.tsx");
   const qaf = await source("app/orange-qaf.ts");
   const centralizer = await source("app/orange-centralizer.ts");
   const oneDrive = await source("app/onedrive-server.ts");
+  assert.match(operations, /Data închiderii/);
+  assert.match(operations, /closingDate/);
   assert.match(operations, /Ora de închidere/);
   assert.match(operations, /closingTime/);
   assert.match(qaf, /documentation\.closingTime/);
-  assert.match(centralizer, /closingTimestamp\(validated\?\.validatedAt, validated\?\.closingTime\)/);
-  assert.match(oneDrive, /orangeClosingTimestamp\(documentation\?\.validatedAt, documentation\?\.closingTime\)/);
+  assert.match(qaf, /manualClosingPlacement\(documentation\.closingDate, documentation\.closingTime, validationDate\)/);
+  assert.match(centralizer, /closingTimestamp\(validated\?\.validatedAt, validated\?\.closingDate, validated\?\.closingTime\)/);
+  assert.match(oneDrive, /orangeClosingTimestamp\(documentation\?\.validatedAt, documentation\?\.closingDate, documentation\?\.closingTime\)/);
+});
+
+test("field photo requirements are enforced by type", async () => {
+  const operations = await source("app/intervention-operations.tsx");
+  const execution = await source("app/intervention-execution.tsx");
+  const server = await source("app/project-server.ts");
+  const filesRoute = await source("app/api/files/route.ts");
+  assert.match(operations, /damageType === "FO cut" \? 3 : 1/);
+  assert.match(server, /assessment\.damageType === "FO cut" \? 3 : 1/);
+  assert.match(execution, /junction-open/);
+  assert.match(execution, /junction-closed/);
+  assert.match(execution, /junction-site/);
+  assert.match(server, /usesOrangeLinearMaterial/);
+  assert.match(filesRoute, /junction-open\|junction-closed\|junction-site/);
 });
 
 test("Orange county is selected from the searchable approved list", async () => {
