@@ -672,7 +672,22 @@ export function InterventionOperationsSection({
                 </select>
                 <small>Este preselectată magazia tehnicianului. Poți alege magazia folosită efectiv pentru această intervenție.</small>
               </label>
-              <label className="intervention-damage-field"><span>Material</span><select value={reviewMaterialKey} onChange={(event) => setReviewMaterialKey(event.target.value)}><option value="">Selectează</option><optgroup label="Orange">{orangeMaterials.map((item) => <option key={`orange:${item.code}`} value={`orange:${item.code}`}>{item.code} · {item.description}</option>)}</optgroup><optgroup label="Proconect">{proconectMaterials.map((item) => <option key={`proconect:${item.code}`} value={`proconect:${item.code}`}>{item.code} · {item.description}</option>)}</optgroup></select></label>
+              <div className="intervention-material-source-lists">
+                <label className="intervention-damage-field">
+                  <span>Material Orange</span>
+                  <select value={reviewMaterialKey.startsWith("orange:") ? reviewMaterialKey : ""} onChange={(event) => setReviewMaterialKey(event.target.value)}>
+                    <option value="">Selectează materialul Orange</option>
+                    {orangeMaterials.map((item) => <option key={item.code} value={`orange:${item.code}`}>{item.code} · {item.description}</option>)}
+                  </select>
+                </label>
+                <label className="intervention-damage-field">
+                  <span>Material Proconect</span>
+                  <select value={reviewMaterialKey.startsWith("proconect:") ? reviewMaterialKey : ""} onChange={(event) => setReviewMaterialKey(event.target.value)}>
+                    <option value="">Selectează materialul Proconect</option>
+                    {proconectMaterials.map((item) => <option key={item.code} value={`proconect:${item.code}`}>{item.code} · {item.description}</option>)}
+                  </select>
+                </label>
+              </div>
               <label className="intervention-damage-field"><span>Cantitate</span><input type="number" min="0.01" step="0.01" value={reviewMaterialQuantity} onChange={(event) => setReviewMaterialQuantity(event.target.value)} /></label>
               <button type="button" className="secondary-button" onClick={addReviewedMaterial}>Adaugă / actualizează materialul</button>
               {reviewMaterials.map((item) => <div className="intervention-records-list" key={`${item.source}:${item.code}`}><article><span>{item.source === "orange" ? "OR" : "PC"}</span><div><strong>{item.code} · {item.description}</strong></div><b>{item.quantity} {item.unit}</b><button type="button" className="record-delete-button" onClick={() => setReviewMaterials((current) => current.filter((entry) => entry !== item))}>Șterge</button></article></div>)}
