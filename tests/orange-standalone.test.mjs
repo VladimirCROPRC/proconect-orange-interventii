@@ -80,6 +80,7 @@ test("QAF records the coordinator who validates the intervention", async () => {
   assert.match(qaf, /writeCachedValuePreservingFormula\(mainXml, "C79", String\(finalized\.day\)\)/);
   assert.match(qaf, /writeCachedValuePreservingFormula\(mainXml, "F79", validationDate, "string"\)/);
   assert.doesNotMatch(qaf, /writeFormula\(mainXml, "F79"/);
+  assert.match(qaf, /validatedBy \? row\.documentation_updated_at \?\? row\.updated_at/);
 });
 
 test("QAF preserves the original workbook hyperlink formulas", async () => {
