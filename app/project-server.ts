@@ -5,6 +5,7 @@ import { initialCpeCatalog, initialFieldDocumentation, initialProjects, type Cpe
 import type { AuthenticatedAccount } from "./server-auth";
 import { orangeServicePackages } from "./orange-services";
 import { buildInterventionConsumptionStatements } from "./inventory-server";
+import { orangeCountySet } from "./orange-counties";
 
 type ProjectRow = {
   id: string;
@@ -91,7 +92,8 @@ function normalizeOrangeDetails(input: ProjectRecord, activityType: ProjectActiv
   const orangeInterventionType = typeof input.orangeInterventionType === "string" && orangeInterventionSlas[input.orangeInterventionType] ? input.orangeInterventionType as ProjectRecord["orangeInterventionType"] : "";
   const sla = typeof input.sla === "string" && orangeInterventionType && orangeInterventionSlas[orangeInterventionType]?.has(input.sla) ? input.sla : "";
   const departureLocality = typeof input.departureLocality === "string" ? input.departureLocality.trim().slice(0, 150) : "";
-  const county = typeof input.county === "string" ? input.county.trim().slice(0, 100) : "";
+  const countyCandidate = typeof input.county === "string" ? input.county.trim().slice(0, 100) : "";
+  const county = orangeCountySet.has(countyCandidate) ? countyCandidate : "";
   return { foSectionName, topology, cableCapacity, routeType, orangeInterventionType, sla, departureLocality, county };
 }
 
@@ -804,8 +806,12 @@ export async function saveFieldDocumentation(projectId: string, section: string,
       }
       const incidentDescription = typeof intervention.documentation.incidentDescription === "string" ? intervention.documentation.incidentDescription.trim() : "";
       const remediationDescription = typeof intervention.documentation.remediationDescription === "string" ? intervention.documentation.remediationDescription.trim() : "";
+      const closingTime = typeof intervention.documentation.closingTime === "string" ? intervention.documentation.closingTime.trim() : "";
       if (!incidentDescription || !remediationDescription || incidentDescription.length > 2_000 || remediationDescription.length > 2_000) {
         return { error: "Validează descrierea incidentului și descrierea remedierii.", status: 400 as const };
+      }
+      if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(closingTime)) {
+        return { error: "Introdu ora de închidere în format HH:MM.", status: 400 as const };
       }
       const materials = intervention.execution?.materials ?? [];
       const warehouseId = typeof intervention.documentation.warehouseId === "string" ? intervention.documentation.warehouseId.trim() : "";
@@ -831,6 +837,7 @@ export async function saveFieldDocumentation(projectId: string, section: string,
           report,
           incidentDescription,
           remediationDescription,
+          closingTime,
           services,
           ...(warehouseId ? { warehouseId } : {}),
           validatedAt: Date.now(),
