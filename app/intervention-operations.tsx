@@ -10,6 +10,8 @@ import type { InterventionCause, InterventionDamageType, InterventionExecutionAc
 import type { ProjectRecord } from "./project-data";
 
 type InterventionSection = "assessment" | "execution" | "documentation";
+type InventoryWarehouse = { id: string; name: string; active: number };
+type InventoryTechnician = { username: string; name: string; warehouse_id?: string | null };
 
 type InterventionOperationsProps = {
   project: ProjectRecord;
@@ -169,6 +171,8 @@ export function InterventionOperationsSection({
   const [reviewMaterials, setReviewMaterials] = useState<InterventionMaterialSelection[]>(initialSummary?.execution?.materials ?? []);
   const [reviewMaterialKey, setReviewMaterialKey] = useState("");
   const [reviewMaterialQuantity, setReviewMaterialQuantity] = useState("");
+  const [warehouses, setWarehouses] = useState<InventoryWarehouse[]>([]);
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState(initialSummary?.documentation?.warehouseId ?? "");
   const [reviewServices, setReviewServices] = useState(initialSummary?.documentation?.services ?? []);
   const [serviceCode, setServiceCode] = useState("");
   const [serviceQuantity, setServiceQuantity] = useState("1");
@@ -209,12 +213,30 @@ export function InterventionOperationsSection({
   }, [project.id, initialSummary?.assessment?.damageType, initialSummary?.assessment?.cause, initialSummary?.assessment?.damageLocation]);
 
   useEffect(() => {
+    if (!canEdit || section !== "documentation") return;
+    let mounted = true;
+    fetch("/api/materials", { cache: "no-store", credentials: "same-origin" })
+      .then(async (response) => {
+        const payload = await response.json() as { warehouses?: InventoryWarehouse[]; technicians?: InventoryTechnician[]; error?: string };
+        if (!response.ok) throw new Error(payload.error || "Magaziile nu sunt disponibile.");
+        if (!mounted) return;
+        const available = payload.warehouses ?? [];
+        const assigned = (payload.technicians ?? []).find((technician) => technician.name === project.technician)?.warehouse_id ?? "";
+        setWarehouses(available);
+        setSelectedWarehouseId((current) => current || initialSummary?.documentation?.warehouseId || assigned);
+      })
+      .catch((failure) => { if (mounted) onNotify(failure instanceof Error ? failure.message : "Magaziile nu sunt disponibile."); });
+    return () => { mounted = false; };
+  }, [canEdit, section, project.technician, initialSummary?.documentation?.warehouseId, onNotify]);
+
+  useEffect(() => {
     let mounted = true;
     queueMicrotask(() => {
       if (mounted) setReport(initialSummary?.documentation?.report ?? buildInterventionReport(project, initialSummary));
       if (mounted) setReviewIncident(initialSummary?.documentation?.incidentDescription ?? initialSummary?.assessment?.incidentDescription ?? "");
       if (mounted) setReviewRemediation(initialSummary?.documentation?.remediationDescription ?? initialSummary?.execution?.remediationDescription ?? "");
       if (mounted) setReviewMaterials(initialSummary?.execution?.materials ?? []);
+      if (mounted) setSelectedWarehouseId(initialSummary?.documentation?.warehouseId ?? "");
       if (mounted) setReviewServices(initialSummary?.documentation?.services ?? []);
     });
     return () => {
@@ -332,6 +354,11 @@ export function InterventionOperationsSection({
       return;
     }
 
+    if (reviewMaterials.length && !selectedWarehouseId) {
+      setError("Selectează magazia din care au fost folosite materialele.");
+      return;
+    }
+
     setSaving(true);
     setError("");
     try {
@@ -343,6 +370,7 @@ export function InterventionOperationsSection({
           incidentDescription: reviewIncident.trim(),
           remediationDescription: reviewRemediation.trim(),
           services: reviewServices,
+          ...(selectedWarehouseId ? { warehouseId: selectedWarehouseId } : {}),
           validatedAt: 0,
           validatedBy: "",
         },
@@ -636,6 +664,14 @@ export function InterventionOperationsSection({
               <label className="intervention-damage-field"><span>Descriere remediere validată</span><textarea rows={5} maxLength={2000} value={reviewRemediation} onChange={(event) => setReviewRemediation(event.target.value)} /></label>
 
               <div className="card-heading"><div><h2>Materiale validate</h2><p>Coordonatorul poate corecta lista înainte de generarea QAF.</p></div></div>
+              <label className="intervention-damage-field">
+                <span>Magazia materialelor <b>{reviewMaterials.length ? "OBLIGATORIU" : "DACĂ EXISTĂ MATERIALE"}</b></span>
+                <select value={selectedWarehouseId} onChange={(event) => setSelectedWarehouseId(event.target.value)} required={reviewMaterials.length > 0}>
+                  <option value="">Selectează magazia</option>
+                  {warehouses.map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouse.name}</option>)}
+                </select>
+                <small>Este preselectată magazia tehnicianului. Poți alege magazia folosită efectiv pentru această intervenție.</small>
+              </label>
               <label className="intervention-damage-field"><span>Material</span><select value={reviewMaterialKey} onChange={(event) => setReviewMaterialKey(event.target.value)}><option value="">Selectează</option><optgroup label="Orange">{orangeMaterials.map((item) => <option key={`orange:${item.code}`} value={`orange:${item.code}`}>{item.code} · {item.description}</option>)}</optgroup><optgroup label="Proconect">{proconectMaterials.map((item) => <option key={`proconect:${item.code}`} value={`proconect:${item.code}`}>{item.code} · {item.description}</option>)}</optgroup></select></label>
               <label className="intervention-damage-field"><span>Cantitate</span><input type="number" min="0.01" step="0.01" value={reviewMaterialQuantity} onChange={(event) => setReviewMaterialQuantity(event.target.value)} /></label>
               <button type="button" className="secondary-button" onClick={addReviewedMaterial}>Adaugă / actualizează materialul</button>
