@@ -170,11 +170,12 @@ function writeFormula(xml: string, cell: string, formula: string, cached: string
 function normalizeCoordinateHelper(xml: string, helperRow: number, sourceRow: number, lat: number, lon: number) {
   const latitude = lat.toFixed(6);
   const longitude = lon.toFixed(6);
-  const parse = (sourceCell: string) => `IF(ISNUMBER('QAF628'!${sourceCell}),'QAF628'!${sourceCell},NUMBERVALUE('QAF628'!${sourceCell},".",","))`;
-  xml = writeFormula(xml, `I${helperRow}`, parse(`C${sourceRow}`), latitude);
-  xml = writeFormula(xml, `J${helperRow}`, parse(`E${sourceRow}`), longitude);
-  xml = writeFormula(xml, `V${helperRow}`, `IF(AND(ISNUMBER(I${helperRow}),ISNUMBER(J${helperRow})),SUBSTITUTE(TEXT(I${helperRow},"0.000000"),",",".")&", "&SUBSTITUTE(TEXT(J${helperRow},"0.000000"),",","."),"")`, `${latitude}, ${longitude}`, "string");
-  const statusFormula = `IF(AND(ISBLANK(I${helperRow}),ISBLANK(J${helperRow})),"",IF(U${helperRow},T${helperRow}&", "&T${helperRow + 1},"nu e acelasi mod de completare"))`;
+  const latCell = `'QAF628'!C${sourceRow}`;
+  const lonCell = `'QAF628'!E${sourceRow}`;
+  // Coordinates are stored as invariant text with a dot. Keep the original
+  // visible HYPERLINK formulas, but feed them locale-independent helper text.
+  xml = writeFormula(xml, `V${helperRow}`, `IF(AND(${latCell}<>"",${lonCell}<>""),${latCell}&", "&${lonCell},"")`, `${latitude}, ${longitude}`, "string");
+  const statusFormula = `IF(AND(${latCell}<>"",${lonCell}<>""),"LAT ok, LONG ok","")`;
   return writeFormula(xml, `W${helperRow}`, statusFormula, "LAT ok, LONG ok", "string");
 }
 
