@@ -81,6 +81,7 @@ async function orangeDocumentation(projectId: string) {
   let remediationDescription = "";
   let validatedAt: number | undefined;
   let validatedBy = "";
+  let closingDate = "";
   let closingTime = "";
   let services: Array<{ code?: string; quantity?: number }> = [];
   let cause = "";
@@ -92,7 +93,7 @@ async function orangeDocumentation(projectId: string) {
         intervention?: {
           assessment?: { cause?: string; arrivedAt?: number; incidentDescription?: string; damageLocation?: DamageLocation; documentedAt?: number; siteMeasurement?: SiteMeasurement; cableCapacity?: number; routeType?: string };
           execution?: { materials?: Material[]; activities?: ExecutionActivity[]; remediationDescription?: string };
-          documentation?: { incidentDescription?: string; remediationDescription?: string; services?: Array<{ code?: string; quantity?: number }>; validatedAt?: number; validatedBy?: string; closingTime?: string };
+          documentation?: { incidentDescription?: string; remediationDescription?: string; services?: Array<{ code?: string; quantity?: number }>; validatedAt?: number; validatedBy?: string; closingDate?: string; closingTime?: string };
         };
       };
       materials = Array.isArray(documentation.intervention?.execution?.materials) ? documentation.intervention!.execution!.materials! : [];
@@ -105,6 +106,7 @@ async function orangeDocumentation(projectId: string) {
       remediationDescription = documentation.intervention?.documentation?.remediationDescription ?? documentation.intervention?.execution?.remediationDescription ?? "";
       validatedAt = documentation.intervention?.documentation?.validatedAt;
       validatedBy = documentation.intervention?.documentation?.validatedBy?.trim() ?? "";
+      closingDate = documentation.intervention?.documentation?.closingDate?.trim() ?? "";
       closingTime = documentation.intervention?.documentation?.closingTime?.trim() ?? "";
       services = Array.isArray(documentation.intervention?.documentation?.services) ? documentation.intervention!.documentation!.services! : [];
       cause = documentation.intervention?.assessment?.cause ?? "";
@@ -123,7 +125,7 @@ async function orangeDocumentation(projectId: string) {
     ?? (validatedBy ? row.documentation_updated_at ?? row.updated_at : undefined)
     ?? (row.status === "Finalizat" ? row.updated_at : undefined);
   return {
-    materials, damageLocation, documentedAt, cause, siteMeasurement, arrivedAt, incidentDescription, remediationDescription, validatedAt: validationTimestamp, validatedBy, closingTime, services,
+    materials, damageLocation, documentedAt, cause, siteMeasurement, arrivedAt, incidentDescription, remediationDescription, validatedAt: validationTimestamp, validatedBy, closingDate, closingTime, services,
     measurementPhotoNames: (measurementPhotos.results ?? []).map((photo) => photo.original_name).filter(Boolean),
     newJunctions: activities
       .filter((activity) => activity.type === "junction-installation" && activity.junction?.kind === "new")
@@ -220,6 +222,18 @@ function localPlacement(timestamp: number | undefined) {
     : null;
 }
 
+function manualClosingPlacement(date: string, time: string, fallback: ReturnType<typeof localPlacement>) {
+  const dateMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  if (!dateMatch || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(time)) return fallback;
+  const year = Number(dateMatch[1]);
+  const month = Number(dateMatch[2]);
+  const day = Number(dateMatch[3]);
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  return parsed.getUTCFullYear() === year && parsed.getUTCMonth() === month - 1 && parsed.getUTCDate() === day
+    ? { day, month, year, time }
+    : fallback;
+}
+
 /** Builds the approved QAF and fills only the material quantity cells selected by the technician. */
 export async function buildOrangeQafXlsx(projectId: string) {
   const assets = (env as unknown as AssetEnvironment).ASSETS;
@@ -266,10 +280,8 @@ export async function buildOrangeQafXlsx(projectId: string) {
   const location = documentation.damageLocation;
   const arrived = localPlacement(documentation.arrivedAt);
   const located = localPlacement(location?.placedAt ?? documentation.documentedAt);
-  const finalizedDate = localPlacement(documentation.validatedAt);
-  const finalized = finalizedDate
-    ? { ...finalizedDate, time: /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(documentation.closingTime) ? documentation.closingTime : finalizedDate.time }
-    : null;
+  const validationDate = localPlacement(documentation.validatedAt);
+  const finalized = manualClosingPlacement(documentation.closingDate, documentation.closingTime, validationDate);
   let mainXml = decoder.decode(main.content);
   const textCells: Array<[string, string]> = [
     ["D5", documentation.siteA], ["K5", documentation.siteB], ["D7", documentation.foSectionName],
@@ -315,12 +327,12 @@ export async function buildOrangeQafXlsx(projectId: string) {
     mainXml = writeNumber(mainXml, `E${row}`, timestamp.year);
     mainXml = writeText(mainXml, `G${row}`, timestamp.time);
   }
-  if (finalized) {
-    mainXml = writeCachedValuePreservingFormula(mainXml, "C79", String(finalized.day));
-    mainXml = writeCachedValuePreservingFormula(mainXml, "D79", String(finalized.month));
-    mainXml = writeCachedValuePreservingFormula(mainXml, "E79", String(finalized.year));
-    const validationDate = `${String(finalized.day).padStart(2, "0")}/${String(finalized.month).padStart(2, "0")}/${finalized.year}`;
-    mainXml = writeCachedValuePreservingFormula(mainXml, "F79", validationDate, "string");
+  if (validationDate) {
+    mainXml = writeCachedValuePreservingFormula(mainXml, "C79", String(validationDate.day));
+    mainXml = writeCachedValuePreservingFormula(mainXml, "D79", String(validationDate.month));
+    mainXml = writeCachedValuePreservingFormula(mainXml, "E79", String(validationDate.year));
+    const formattedValidationDate = `${String(validationDate.day).padStart(2, "0")}/${String(validationDate.month).padStart(2, "0")}/${validationDate.year}`;
+    mainXml = writeCachedValuePreservingFormula(mainXml, "F79", formattedValidationDate, "string");
   }
   main.content = encoder.encode(mainXml);
   helper.content = encoder.encode(helperXml);
