@@ -710,8 +710,10 @@ export async function saveFieldDocumentation(projectId: string, section: string,
       .bind(projectId, "intervention-assessment")
       .all<{ category: string; geolocation: string }>();
 
-    if (!(photos.results ?? []).some((photo) => photo.category === "damage" && hasValidPhotoCoordinates(photo.geolocation))) {
-      return { error: "Încarcă cel puțin o fotografie a avariei cu coordonate GPS valide.", status: 400 as const };
+    const validDamagePhotos = (photos.results ?? []).filter((photo) => photo.category === "damage" && hasValidPhotoCoordinates(photo.geolocation)).length;
+    const requiredDamagePhotos = assessment.damageType === "FO cut" ? 3 : 1;
+    if (validDamagePhotos < requiredDamagePhotos) {
+      return { error: assessment.damageType === "FO cut" ? "Pentru FO cut sunt obligatorii cel puțin 3 fotografii cu coordonate GPS valide." : "Încarcă cel puțin o fotografie a avariei cu coordonate GPS valide.", status: 400 as const };
     }
     if (assessment.siteMeasurement) {
       const siteCode = typeof assessment.siteMeasurement.siteCode === "string" ? assessment.siteMeasurement.siteCode.trim() : "";
@@ -736,6 +738,7 @@ export async function saveFieldDocumentation(projectId: string, section: string,
         .all<{ category: string; geolocation: string }>();
       const geotaggedExecutionPhotos = (executionPhotos.results ?? []).filter((photo) => hasValidPhotoCoordinates(photo.geolocation));
       const identifiers = new Set<string>();
+      const usesOrangeLinearMaterial = (execution.materials ?? []).some((material) => material?.source === "orange" && material?.unit?.trim().toLocaleLowerCase("ro-RO") === "ml");
 
       for (const item of execution.activities as InterventionExecutionActivity[]) {
         if (!item || typeof item.id !== "string" || !/^[a-f0-9-]{36}$/i.test(item.id) || identifiers.has(item.id)) {
@@ -762,7 +765,7 @@ export async function saveFieldDocumentation(projectId: string, section: string,
           if (!Number.isFinite(cableLength) || cableLength <= 0 || cableLength > 1_000_000) {
             return { error: "Introdu o lungime validă pentru cablul FO instalat.", status: 400 as const };
           }
-          requiredPhotos = requiredInterventionCablePhotos(cableLength);
+          requiredPhotos = assessment.routeType === "Aerian" && usesOrangeLinearMaterial ? requiredInterventionCablePhotos(cableLength) : 1;
         } else {
           if (project.activity_type === "Intervenție Orange" ? !item.junction || !Number.isFinite(item.junction.lat) || !Number.isFinite(item.junction.lon) || !item.junction.kind : !validInterventionJunction(item.junction)) {
             return { error: project.activity_type === "Intervenție Orange" ? "Selectează sau plasează punctul activității pe hartă." : "Selectează sau plasează joncțiunea și completează rețeaua Orange.", status: 400 as const };
@@ -772,12 +775,18 @@ export async function saveFieldDocumentation(projectId: string, section: string,
           }
         }
 
+        if (item.type === "junction-installation") requiredPhotos = 3;
         if (item.type === "chamber-installation") requiredPhotos = 2;
 
-        const activityPhotos = geotaggedExecutionPhotos.filter((photo) => photo.category === `${item.id}:photo`).length;
+        const junctionCategories = [`${item.id}:junction-open`, `${item.id}:junction-closed`, `${item.id}:junction-site`];
+        const activityPhotos = item.type === "junction-installation"
+          ? junctionCategories.filter((category) => geotaggedExecutionPhotos.some((photo) => photo.category === category)).length
+          : geotaggedExecutionPhotos.filter((photo) => photo.category === `${item.id}:photo`).length;
         if (activityPhotos < requiredPhotos) {
           return { error: item.type === "fo-installation"
-            ? `Pentru ${item.cableLengthMeters} m sunt obligatorii ${requiredPhotos} fotografii GPS ale instalării FO.`
+            ? `Pentru ${item.cableLengthMeters} m de cablu aerian sunt obligatorii minimum ${requiredPhotos} fotografii GPS ale instalării FO.`
+            : item.type === "junction-installation"
+              ? "Pentru fiecare joncțiune sunt obligatorii trei fotografii GPS distincte: deschisă, închisă și pe amplasament."
             : item.type === "chamber-installation"
               ? "Pentru instalarea cămeretei sunt obligatorii două fotografii cu GPS."
               : "Încarcă cel puțin o fotografie cu GPS din care să reiasă remedierea.", status: 400 as const };
@@ -807,8 +816,14 @@ export async function saveFieldDocumentation(projectId: string, section: string,
       const incidentDescription = typeof intervention.documentation.incidentDescription === "string" ? intervention.documentation.incidentDescription.trim() : "";
       const remediationDescription = typeof intervention.documentation.remediationDescription === "string" ? intervention.documentation.remediationDescription.trim() : "";
       const closingTime = typeof intervention.documentation.closingTime === "string" ? intervention.documentation.closingTime.trim() : "";
+      const closingDate = typeof intervention.documentation.closingDate === "string" ? intervention.documentation.closingDate.trim() : "";
       if (!incidentDescription || !remediationDescription || incidentDescription.length > 2_000 || remediationDescription.length > 2_000) {
         return { error: "Validează descrierea incidentului și descrierea remedierii.", status: 400 as const };
+      }
+      const closingDateMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(closingDate);
+      const closingDateValue = closingDateMatch ? new Date(Date.UTC(Number(closingDateMatch[1]), Number(closingDateMatch[2]) - 1, Number(closingDateMatch[3]))) : null;
+      if (!closingDateMatch || !closingDateValue || closingDateValue.getUTCFullYear() !== Number(closingDateMatch[1]) || closingDateValue.getUTCMonth() !== Number(closingDateMatch[2]) - 1 || closingDateValue.getUTCDate() !== Number(closingDateMatch[3])) {
+        return { error: "Introdu o dată de închidere validă.", status: 400 as const };
       }
       if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(closingTime)) {
         return { error: "Introdu ora de închidere în format HH:MM.", status: 400 as const };
@@ -837,6 +852,7 @@ export async function saveFieldDocumentation(projectId: string, section: string,
           report,
           incidentDescription,
           remediationDescription,
+          closingDate,
           closingTime,
           services,
           ...(warehouseId ? { warehouseId } : {}),
