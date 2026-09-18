@@ -146,7 +146,7 @@ function writeNumber(xml: string, cell: string, value: number) {
 function writeMapsLink(xml: string, cell: string, lat: number, lon: number) {
   const latitude = lat.toFixed(6);
   const longitude = lon.toFixed(6);
-  const formula = `HYPERLINK("https://maps.google.com/?q=${latitude},${longitude}","Deschide Google Maps")`;
+  const formula = `HYPERLINK("https://www.google.com/maps/search/?api=1&amp;query=${latitude}%2C${longitude}","Deschide Google Maps")`;
   const selfClosing = new RegExp(`<c r="${cell}"([^>]*)\\/>`);
   const populated = new RegExp(`<c r="${cell}"([^>]*)>.*?<\\/c>`);
   const render = (attributes: string) => `<c r="${cell}"${attributes.replace(/\s+t="[^"]*"/g, "")} t="str"><f>${formula}</f><v>Deschide Google Maps</v></c>`;
