@@ -265,8 +265,11 @@ export async function buildOrangeQafXlsx(projectId: string) {
   if (mapLinks.length) {
     const hyperlinks = `<hyperlinks>${mapLinks.map((link, index) => `<hyperlink ref="${link.cell}" r:id="rIdMap${index + 1}"/>`).join("")}</hyperlinks>`;
     mainXml = mainXml.replace(/<hyperlinks>.*?<\/hyperlinks>/, "");
-    mainXml = mainXml.includes("</mergeCells>")
-      ? mainXml.replace("</mergeCells>", `</mergeCells>${hyperlinks}`)
+    // ECMA-376 requires hyperlinks after dataValidations and before
+    // print/page settings. Placing them directly after mergeCells makes Excel
+    // repair the workbook and can leave the main sheet blank in Excel Online.
+    mainXml = mainXml.includes("</dataValidations>")
+      ? mainXml.replace("</dataValidations>", `</dataValidations>${hyperlinks}`)
       : mainXml.replace("<pageMargins", `${hyperlinks}<pageMargins`);
     let relationshipsXml = decoder.decode(mainRelationships.content);
     const relations = mapLinks.map((link, index) => `<Relationship Id="rIdMap${index + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="${link.url.replace(/&/g, "&amp;")}" TargetMode="External"/>`).join("");
