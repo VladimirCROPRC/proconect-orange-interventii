@@ -6,7 +6,7 @@ type ZipEntry = { name: string; content: Uint8Array };
 type ProjectRow = {
   id: string; fo_section_name: string; topology: string; cable_capacity: number; route_type: string;
   orange_intervention_type: string; sla: string; departure_locality: string; county: string;
-  requirements: string; technician: string; status: string; created_at: number; content_json: string | null;
+  requirements: string; technician: string; status: string; scheduled_label: string; created_at: number; content_json: string | null;
 };
 
 const decoder = new TextDecoder();
@@ -120,6 +120,12 @@ function bucharestTimestamp(value: unknown) {
   }).format(new Date(value));
 }
 
+function requestDateTimestamp(value: unknown, fallback: unknown) {
+  if (typeof value === "string" && !value.trim()) return "";
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) return `${value.slice(8, 10)}.${value.slice(5, 7)}.${value.slice(0, 4)}`;
+  return bucharestTimestamp(fallback);
+}
+
 function closingTimestamp(validatedAt: unknown, closingDate: unknown, closingTime: unknown) {
   const timestamp = bucharestTimestamp(validatedAt);
   if (typeof closingDate !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(closingDate) || typeof closingTime !== "string" || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(closingTime)) return timestamp;
@@ -147,7 +153,7 @@ function projectValues(project: ProjectRow) {
     topology: project.topology,
     status: project.status === "Finalizat" ? "Raport finalizat" : assessment ? "În lucru" : "Tichet generat",
     sla: project.sla,
-    created: bucharestTimestamp(project.created_at),
+    created: requestDateTimestamp(project.scheduled_label, project.created_at),
     arrived: bucharestTimestamp(assessment?.arrivedAt),
     located: bucharestTimestamp(location?.placedAt ?? assessment?.documentedAt),
     completed: closingTimestamp(validated?.validatedAt, validated?.closingDate, validated?.closingTime),
@@ -180,7 +186,7 @@ export async function buildOrangeCentralizerXlsx() {
   if (!response.ok) throw new Error("Șablonul centralizatorului Orange nu a putut fi încărcat.");
   const files = await unzip(new Uint8Array(await response.arrayBuffer()));
   const projects = await getRawDb().prepare(
-    "SELECT projects.id, projects.fo_section_name, projects.topology, projects.cable_capacity, projects.route_type, projects.orange_intervention_type, projects.sla, projects.departure_locality, projects.county, projects.requirements, projects.technician, projects.status, projects.created_at, project_field_documentation.content_json FROM projects LEFT JOIN project_field_documentation ON project_field_documentation.project_id = projects.id WHERE projects.activity_type = 'Intervenție Orange' ORDER BY projects.created_at ASC, projects.id ASC",
+    "SELECT projects.id, projects.fo_section_name, projects.topology, projects.cable_capacity, projects.route_type, projects.orange_intervention_type, projects.sla, projects.departure_locality, projects.county, projects.requirements, projects.technician, projects.status, projects.scheduled_label, projects.created_at, project_field_documentation.content_json FROM projects LEFT JOIN project_field_documentation ON project_field_documentation.project_id = projects.id WHERE projects.activity_type = 'Intervenție Orange' ORDER BY projects.created_at ASC, projects.id ASC",
   ).all<ProjectRow>();
   const rows = projects.results ?? [];
   const sheet = files.find((file) => file.name === "xl/worksheets/sheet6.xml");
