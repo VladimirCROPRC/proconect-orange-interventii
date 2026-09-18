@@ -209,7 +209,14 @@ function bucharestTimestamp(value: number) {
 }
 
 async function graphJson<T>(response: Response) {
-  if (!response.ok) throw new RemoteFailure(`Excel Online: operațiunea a eșuat (HTTP ${response.status}).${response.status === 401 || response.status === 403 ? " Reconectează contul Microsoft sau verifică accesul la registru." : ""}`, retryDelay(0, response.headers.get("Retry-After")));
+  if (!response.ok) {
+    const explanation = response.status === 423
+      ? " Registrul este temporar blocat de Excel/OneDrive; sincronizarea va reîncerca automat după eliberarea lui."
+      : response.status === 401 || response.status === 403
+        ? " Reconectează contul Microsoft sau verifică accesul la registru."
+        : "";
+    throw new RemoteFailure(`Excel Online: operațiunea a eșuat (HTTP ${response.status}).${explanation}`, retryDelay(0, response.headers.get("Retry-After")));
+  }
   return response.json() as Promise<T>;
 }
 
