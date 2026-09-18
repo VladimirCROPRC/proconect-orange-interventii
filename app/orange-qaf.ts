@@ -172,6 +172,10 @@ function writeFormula(xml: string, cell: string, formula: string, cached: string
 }
 
 function writeCachedValuePreservingFormula(xml: string, cell: string, value: string, type: "number" | "string" = "number") {
+  const selfClosing = new RegExp(`<c r="${cell}"([^>]*)\\/>`);
+  if (selfClosing.test(xml)) {
+    return type === "number" ? writeNumber(xml, cell, Number(value)) : writeText(xml, cell, value);
+  }
   const populated = new RegExp(`<c r="${cell}"([^>]*)>(.*?)<\\/c>`);
   const existing = populated.exec(xml);
   if (!existing || !existing[2].includes("<f")) {
