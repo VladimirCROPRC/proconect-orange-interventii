@@ -807,6 +807,11 @@ export async function saveFieldDocumentation(projectId: string, section: string,
       if (!incidentDescription || !remediationDescription || incidentDescription.length > 2_000 || remediationDescription.length > 2_000) {
         return { error: "Validează descrierea incidentului și descrierea remedierii.", status: 400 as const };
       }
+      const materials = intervention.execution?.materials ?? [];
+      const warehouseId = typeof intervention.documentation.warehouseId === "string" ? intervention.documentation.warehouseId.trim() : "";
+      if (materials.length && !warehouseId) {
+        return { error: "Selectează magazia din care au fost consumate materialele.", status: 400 as const };
+      }
       const services = intervention.documentation.services ?? [];
       const serviceCodes = new Set(orangeServicePackages.map((service) => service.code));
       if (!Array.isArray(services) || services.length > orangeServicePackages.length || services.some((service) => !serviceCodes.has(String(service.code)) || typeof service.quantity !== "number" || !Number.isFinite(service.quantity) || service.quantity <= 0 || service.quantity > 1_000_000)) {
@@ -827,6 +832,7 @@ export async function saveFieldDocumentation(projectId: string, section: string,
           incidentDescription,
           remediationDescription,
           services,
+          ...(warehouseId ? { warehouseId } : {}),
           validatedAt: Date.now(),
           validatedBy: account.name,
         } satisfies InterventionDocumentationSummary,
@@ -861,7 +867,7 @@ export async function saveFieldDocumentation(projectId: string, section: string,
 
   if (finalizedProject) {
     const materials = next.intervention?.execution?.materials ?? [];
-    const consumption = await buildInterventionConsumptionStatements(projectId, project.technician_username, materials, account, now);
+    const consumption = await buildInterventionConsumptionStatements(projectId, project.technician_username, materials, account, now, next.intervention?.documentation?.warehouseId);
     if ("error" in consumption) return consumption;
     await getRawDb().batch([
       saveDocumentation,
