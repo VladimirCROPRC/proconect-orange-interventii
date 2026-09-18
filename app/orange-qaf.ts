@@ -79,6 +79,7 @@ async function orangeDocumentation(projectId: string) {
   let incidentDescription = "";
   let remediationDescription = "";
   let validatedAt: number | undefined;
+  let validatedBy = "";
   let services: Array<{ code?: string; quantity?: number }> = [];
   let cause = "";
   let assessedCableCapacity = 0;
@@ -89,7 +90,7 @@ async function orangeDocumentation(projectId: string) {
         intervention?: {
           assessment?: { cause?: string; arrivedAt?: number; incidentDescription?: string; damageLocation?: DamageLocation; documentedAt?: number; siteMeasurement?: SiteMeasurement; cableCapacity?: number; routeType?: string };
           execution?: { materials?: Material[]; activities?: ExecutionActivity[]; remediationDescription?: string };
-          documentation?: { incidentDescription?: string; remediationDescription?: string; services?: Array<{ code?: string; quantity?: number }>; validatedAt?: number };
+          documentation?: { incidentDescription?: string; remediationDescription?: string; services?: Array<{ code?: string; quantity?: number }>; validatedAt?: number; validatedBy?: string };
         };
       };
       materials = Array.isArray(documentation.intervention?.execution?.materials) ? documentation.intervention!.execution!.materials! : [];
@@ -101,6 +102,7 @@ async function orangeDocumentation(projectId: string) {
       incidentDescription = documentation.intervention?.documentation?.incidentDescription ?? documentation.intervention?.assessment?.incidentDescription ?? "";
       remediationDescription = documentation.intervention?.documentation?.remediationDescription ?? documentation.intervention?.execution?.remediationDescription ?? "";
       validatedAt = documentation.intervention?.documentation?.validatedAt;
+      validatedBy = documentation.intervention?.documentation?.validatedBy?.trim() ?? "";
       services = Array.isArray(documentation.intervention?.documentation?.services) ? documentation.intervention!.documentation!.services! : [];
       cause = documentation.intervention?.assessment?.cause ?? "";
       assessedCableCapacity = Number(documentation.intervention?.assessment?.cableCapacity) || 0;
@@ -115,7 +117,7 @@ async function orangeDocumentation(projectId: string) {
     ).bind(projectId).all<{ original_name: string }>()
     : { results: [] as Array<{ original_name: string }> };
   return {
-    materials, damageLocation, documentedAt, cause, siteMeasurement, arrivedAt, incidentDescription, remediationDescription, validatedAt, services,
+    materials, damageLocation, documentedAt, cause, siteMeasurement, arrivedAt, incidentDescription, remediationDescription, validatedAt, validatedBy, services,
     measurementPhotoNames: (measurementPhotos.results ?? []).map((photo) => photo.original_name).filter(Boolean),
     newJunctions: activities
       .filter((activity) => activity.type === "junction-installation" && activity.junction?.kind === "new")
@@ -228,7 +230,7 @@ export async function buildOrangeQafXlsx(projectId: string) {
     ["D5", documentation.siteA], ["K5", documentation.siteB], ["D7", documentation.foSectionName],
     ["D9", documentation.topology], ["I11", documentation.routeType], ["D14", documentation.interventionType],
     ["F14", documentation.sla], ["D15", qafTicketNumber(projectId)], ["D16", documentation.departureLocality], ["C23", documentation.cause],
-    ["C25", documentation.incidentDescription], ["C29", documentation.remediationDescription],
+    ["C25", documentation.incidentDescription], ["C29", documentation.remediationDescription], ["C77", documentation.validatedBy],
   ];
   for (const [cell, value] of textCells) {
     if (value) mainXml = writeText(mainXml, cell, value);
