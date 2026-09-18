@@ -72,3 +72,9 @@ test("OneDrive uses the existing Orange reports hierarchy", async () => {
   assert.match(oneDrive, /romanianMonths/);
   assert.doesNotMatch(oneDrive, /"Depuse"/);
 });
+
+test("QAF records the coordinator who validates the intervention", async () => {
+  const qaf = await source("app/orange-qaf.ts");
+  assert.match(qaf, /validatedBy/);
+  assert.match(qaf, /\["C77", documentation\.validatedBy\]/);
+});
