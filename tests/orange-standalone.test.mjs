@@ -64,7 +64,10 @@ test("Orange is the default and only activity in navigation", async () => {
   assert.doesNotMatch(navigation, /> Survey/);
 });
 
-test("OneDrive uses a dedicated Orange root folder", async () => {
+test("OneDrive uses the existing Orange reports hierarchy", async () => {
   const oneDrive = await source("app/onedrive-server.ts");
-  assert.match(oneDrive, /Proconect Orange Interventii/);
+  assert.match(oneDrive, /Rapoarte incidente Pro Conect/);
+  assert.match(oneDrive, /rapoarte de interventie/);
+  assert.match(oneDrive, /romanianMonths/);
+  assert.doesNotMatch(oneDrive, /"Depuse"/);
 });
