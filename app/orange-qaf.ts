@@ -143,19 +143,6 @@ function writeNumber(xml: string, cell: string, value: number) {
   return writeQuantity(xml, cell, value);
 }
 
-function writeMapsLink(xml: string, cell: string, lat: number, lon: number) {
-  const latitude = lat.toFixed(6);
-  const longitude = lon.toFixed(6);
-  const formula = `HYPERLINK("https://www.google.com/maps/search/?api=1&amp;query=${latitude}%2C${longitude}","Deschide Google Maps")`;
-  const selfClosing = new RegExp(`<c r="${cell}"([^>]*)\\/>`);
-  const populated = new RegExp(`<c r="${cell}"([^>]*)>.*?<\\/c>`);
-  const render = (attributes: string) => `<c r="${cell}"${attributes.replace(/\s+t="[^"]*"/g, "")} t="str"><f>${formula}</f><v>Deschide Google Maps</v></c>`;
-  const empty = selfClosing.exec(xml);
-  if (empty) return xml.replace(empty[0], render(empty[1]));
-  const existing = populated.exec(xml);
-  return existing ? xml.replace(existing[0], render(existing[1])) : xml;
-}
-
 function writeText(xml: string, cell: string, value: string) {
   const selfClosing = new RegExp(`<c r="${cell}"([^>]*)\\/>`);
   const populated = new RegExp(`<c r="${cell}"([^>]*)>.*?<\\/c>`);
@@ -225,11 +212,18 @@ export async function buildOrangeQafXlsx(projectId: string) {
   servicesSheet.content = encoder.encode(servicesXml);
   const main = files.find((file) => file.name === "xl/worksheets/sheet1.xml");
   if (!main) throw new Error("Șablonul QAF Orange nu conține foaia principală.");
+  const mainRelationships = files.find((file) => file.name === "xl/worksheets/_rels/sheet1.xml.rels");
+  if (!mainRelationships) throw new Error("Șablonul QAF Orange nu conține relațiile foii principale.");
   const location = documentation.damageLocation;
   const arrived = localPlacement(documentation.arrivedAt);
   const located = localPlacement(location?.placedAt ?? documentation.documentedAt);
   const finalized = localPlacement(documentation.validatedAt);
   let mainXml = decoder.decode(main.content);
+  const mapLinks: Array<{ cell: string; url: string }> = [];
+  const addMapLink = (cell: string, lat: number, lon: number) => {
+    mainXml = writeText(mainXml, cell, "Deschide Google Maps");
+    mapLinks.push({ cell, url: `https://www.google.com/maps/search/?api=1&query=${lat.toFixed(6)}%2C${lon.toFixed(6)}` });
+  };
   const textCells: Array<[string, string]> = [
     ["D5", documentation.siteA], ["K5", documentation.siteB], ["D7", documentation.foSectionName],
     ["D9", documentation.topology], ["I11", documentation.routeType], ["D14", documentation.interventionType],
@@ -243,13 +237,13 @@ export async function buildOrangeQafXlsx(projectId: string) {
   if (location && Number.isFinite(location.lat) && Number.isFinite(location.lon)) {
     mainXml = writeNumber(mainXml, "C34", Number(location.lat!.toFixed(6)));
     mainXml = writeNumber(mainXml, "E34", Number(location.lon!.toFixed(6)));
-    mainXml = writeMapsLink(mainXml, "G34", location.lat!, location.lon!);
+    addMapLink("G34", location.lat!, location.lon!);
   }
   documentation.newJunctions.forEach((junction, index) => {
     const row = 41 + index;
     mainXml = writeNumber(mainXml, `C${row}`, Number(junction.lat!.toFixed(6)));
     mainXml = writeNumber(mainXml, `E${row}`, Number(junction.lon!.toFixed(6)));
-    mainXml = writeMapsLink(mainXml, `G${row}`, junction.lat!, junction.lon!);
+    addMapLink(`G${row}`, junction.lat!, junction.lon!);
     mainXml = writeText(mainXml, `C${46 + index}`, qafJunctionNicmName(projectId, index + 1));
   });
   if (documentation.siteMeasurement) {
@@ -265,6 +259,17 @@ export async function buildOrangeQafXlsx(projectId: string) {
     mainXml = writeNumber(mainXml, `D${row}`, timestamp.month);
     mainXml = writeNumber(mainXml, `E${row}`, timestamp.year);
     mainXml = writeText(mainXml, `G${row}`, timestamp.time);
+  }
+  if (mapLinks.length) {
+    const hyperlinks = `<hyperlinks>${mapLinks.map((link, index) => `<hyperlink ref="${link.cell}" r:id="rIdMap${index + 1}"/>`).join("")}</hyperlinks>`;
+    mainXml = mainXml.replace(/<hyperlinks>.*?<\/hyperlinks>/, "");
+    mainXml = mainXml.includes("</mergeCells>")
+      ? mainXml.replace("</mergeCells>", `</mergeCells>${hyperlinks}`)
+      : mainXml.replace("<pageMargins", `${hyperlinks}<pageMargins`);
+    let relationshipsXml = decoder.decode(mainRelationships.content);
+    const relations = mapLinks.map((link, index) => `<Relationship Id="rIdMap${index + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="${link.url.replace(/&/g, "&amp;")}" TargetMode="External"/>`).join("");
+    relationshipsXml = relationshipsXml.replace("</Relationships>", `${relations}</Relationships>`);
+    mainRelationships.content = encoder.encode(relationshipsXml);
   }
   main.content = encoder.encode(mainXml);
 
