@@ -16,6 +16,7 @@ import type { ClientFieldSummary, ClientSfpType, InterventionFieldSummary, Proje
 import { TechnicianProjectSafety, type ProjectSafetyStatus } from "./technician-project-safety";
 import { NoInterventionControl } from "./no-intervention-control";
 import { buildTicketsWithoutOrderXlsx } from "./ticket-report-xlsx";
+import { orangeCounties } from "./orange-counties";
 
 type View = "projects" | "interventions" | "orange-interventions" | "surveys" | "map" | "intervention-workspace" | "intervention-execution" | "intervention-documentation" | "survey-workspace" | "team" | "cpe" | "drive" | "materials" | "documents" | "client" | "route" | "splices" | "site";
 type ActivityListView = "projects" | "interventions" | "orange-interventions" | "surveys";
@@ -1652,7 +1653,7 @@ export default function Home() {
                   <label><span>Tip intervenție *</span><select name="orangeInterventionType" required value={orangeInterventionType ?? ""} onChange={(event) => { setOrangeInterventionType(event.target.value as Project["orangeInterventionType"]); setOrangeSla(""); }}><option value="" disabled>Selectează tipul</option><option>FITT</option><option>IMO</option><option>PBM</option></select></label>
                   <label><span>SLA *</span><select name="sla" required value={orangeSla} disabled={!orangeInterventionType} onChange={(event) => setOrangeSla(event.target.value)}><option value="" disabled>{orangeInterventionType ? "Selectează SLA" : "Selectează mai întâi tipul"}</option>{orangeInterventionType && orangeSlaOptions[orangeInterventionType]?.map((option) => <option key={option}>{option}</option>)}</select></label>
                   <label className="wide"><span>Localitate plecare echipă *</span><input name="departureLocality" required maxLength={150} defaultValue={editingProject?.departureLocality ?? ""} /></label>
-                  <label><span>Județ *</span><input name="county" required maxLength={100} defaultValue={editingProject?.county ?? ""} /></label>
+                  <label><span>Județ *</span><input name="county" list="orange-counties" required maxLength={100} autoComplete="off" defaultValue={editingProject?.county ?? ""} /><datalist id="orange-counties">{orangeCounties.map((county) => <option key={county} value={county} />)}</datalist><small>Scrie pentru a căuta în lista județelor disponibile.</small></label>
                 </>}
                 {!isOrangeForm && <><label><span>Persoană de contact *</span><input name="contact" required defaultValue={editingProject?.contact} /></label>
                 <label><span>Telefon *</span><input name="phone" required defaultValue={editingProject?.phone} /></label>
