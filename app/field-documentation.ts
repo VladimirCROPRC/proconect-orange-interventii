@@ -177,6 +177,7 @@ export type InterventionDocumentationSummary = {
   remediationDescription?: string;
   services?: InterventionServiceSelection[];
   warehouseId?: string;
+  closingDate?: string;
   closingTime?: string;
   validatedAt: number;
   validatedBy: string;
@@ -186,8 +187,7 @@ export function requiredInterventionCablePhotos(lengthMeters: number) {
   if (!Number.isFinite(lengthMeters) || lengthMeters <= 0) return 0;
   if (lengthMeters <= 100) return 3;
   if (lengthMeters <= 200) return 5;
-  if (lengthMeters <= 300) return 10;
-  return 15;
+  return 10;
 }
 
 export type InterventionFieldSummary = {
