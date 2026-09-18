@@ -156,6 +156,23 @@ function writeText(xml: string, cell: string, value: string) {
   return existing ? xml.replace(existing[0], render(existing[1])) : xml;
 }
 
+function useDotDecimalForCoordinates(xml: string) {
+  if (!xml.includes('numFmtId="167"')) {
+    xml = xml.replace(/<numFmts count="(\d+)">/, (_match, count: string) => `<numFmts count="${Number(count) + 1}">`);
+    xml = xml.replace("</numFmts>", '<numFmt numFmtId="167" formatCode="[$-409]0.000000"/></numFmts>');
+  }
+  return xml.replace(/<cellXfs\b[^>]*>[\s\S]*?<\/cellXfs>/, (cellXfs) => {
+    let index = -1;
+    return cellXfs.replace(/<xf\b[^>]*\/>/g, (style) => {
+      index += 1;
+      if (index !== 166) return style;
+      let updated = style.replace(/numFmtId="\d+"/, 'numFmtId="167"');
+      updated = updated.replace(/\s+applyNumberFormat="[^"]*"/, "");
+      return updated.replace("/>", ' applyNumberFormat="1"/>');
+    });
+  });
+}
+
 function localPlacement(timestamp: number | undefined) {
   if (!timestamp || !Number.isFinite(timestamp)) return null;
   const parts = new Intl.DateTimeFormat("ro-RO", {
@@ -182,6 +199,9 @@ export async function buildOrangeQafXlsx(projectId: string) {
   const files = await unzip(new Uint8Array(await response.arrayBuffer()));
   const documentation = await orangeDocumentation(projectId);
   if (!documentation) throw new Error("Tichetul Orange nu a fost găsit.");
+  const styles = files.find((file) => file.name === "xl/styles.xml");
+  if (!styles) throw new Error("Șablonul QAF Orange nu conține stilurile Excel.");
+  styles.content = encoder.encode(useDotDecimalForCoordinates(decoder.decode(styles.content)));
   const quantities = new Map<string, number>();
   for (const item of documentation.materials) {
     const quantity = Number(item.quantity);
