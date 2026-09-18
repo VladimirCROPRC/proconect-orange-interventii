@@ -533,7 +533,7 @@ export async function drainOneDrive() {
     .bind(lease, Date.now() + 120_000, settingsId, Date.now()).first<Connection>();
   if (!c) return;
   try {
-    const job = await getRawDb().prepare("SELECT * FROM onedrive_jobs WHERE revision > done_revision AND next_at <= ? ORDER BY next_at, id LIMIT 1").bind(Date.now()).first<Job>();
+    const job = await getRawDb().prepare("SELECT * FROM onedrive_jobs WHERE revision > done_revision AND next_at <= ? ORDER BY next_at, CASE WHEN kind = 'project' THEN 0 ELSE 1 END, id LIMIT 1").bind(Date.now()).first<Job>();
     if (!job) return;
     try {
       await uploadJob(c, job);
