@@ -83,8 +83,8 @@ test("QAF preserves the original workbook hyperlink formulas", async () => {
   const qaf = await source("app/orange-qaf.ts");
   assert.doesNotMatch(qaf, /mainRelationships|rIdMap|mapLinks|addMapLink/);
   assert.doesNotMatch(qaf, /writeText\(mainXml, "G34"/);
-  assert.match(qaf, /NUMBERVALUE/);
-  assert.match(qaf, /SUBSTITUTE\(TEXT/);
+  assert.doesNotMatch(qaf, /NUMBERVALUE/);
+  assert.match(qaf, /LAT ok, LONG ok/);
   assert.match(qaf, /writeText\(mainXml, "C34", latitude\)/);
   assert.match(qaf, /fullCalcOnLoad="1"/);
 });
