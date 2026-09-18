@@ -167,6 +167,20 @@ function writeFormula(xml: string, cell: string, formula: string, cached: string
   return xml.replace(existing[0], rendered);
 }
 
+function writeCachedValuePreservingFormula(xml: string, cell: string, value: string, type: "number" | "string" = "number") {
+  const populated = new RegExp(`<c r="${cell}"([^>]*)>(.*?)<\\/c>`);
+  const existing = populated.exec(xml);
+  if (!existing || !existing[2].includes("<f")) {
+    return type === "number" ? writeNumber(xml, cell, Number(value)) : writeText(xml, cell, value);
+  }
+  const attributes = existing[1].replace(/\s+t="[^"]*"/g, "");
+  const escaped = value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const body = existing[2].includes("<v")
+    ? existing[2].replace(/<v>.*?<\/v>/, `<v>${escaped}</v>`)
+    : `${existing[2]}<v>${escaped}</v>`;
+  return xml.replace(existing[0], `<c r="${cell}"${attributes}${type === "string" ? ' t="str"' : ""}>${body}</c>`);
+}
+
 function normalizeCoordinateHelper(xml: string, helperRow: number, sourceRow: number, lat: number, lon: number) {
   const latitude = lat.toFixed(6);
   const longitude = lon.toFixed(6);
@@ -289,11 +303,11 @@ export async function buildOrangeQafXlsx(projectId: string) {
     mainXml = writeText(mainXml, `G${row}`, timestamp.time);
   }
   if (finalized) {
-    mainXml = writeNumber(mainXml, "C79", finalized.day);
-    mainXml = writeNumber(mainXml, "D79", finalized.month);
-    mainXml = writeNumber(mainXml, "E79", finalized.year);
+    mainXml = writeCachedValuePreservingFormula(mainXml, "C79", String(finalized.day));
+    mainXml = writeCachedValuePreservingFormula(mainXml, "D79", String(finalized.month));
+    mainXml = writeCachedValuePreservingFormula(mainXml, "E79", String(finalized.year));
     const validationDate = `${String(finalized.day).padStart(2, "0")}/${String(finalized.month).padStart(2, "0")}/${finalized.year}`;
-    mainXml = writeFormula(mainXml, "F79", 'CONCATENATE(IF(C79<10,"0"&C79,C79),"/",IF(D79<10,"0"&D79,D79),"/",E79)', validationDate, "string");
+    mainXml = writeCachedValuePreservingFormula(mainXml, "F79", validationDate, "string");
   }
   main.content = encoder.encode(mainXml);
   helper.content = encoder.encode(helperXml);
