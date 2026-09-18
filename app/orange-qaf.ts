@@ -156,21 +156,26 @@ function writeText(xml: string, cell: string, value: string) {
   return existing ? xml.replace(existing[0], render(existing[1])) : xml;
 }
 
-function useDotDecimalForCoordinates(xml: string) {
-  if (!xml.includes('numFmtId="167"')) {
-    xml = xml.replace(/<numFmts count="(\d+)">/, (_match, count: string) => `<numFmts count="${Number(count) + 1}">`);
-    xml = xml.replace("</numFmts>", '<numFmt numFmtId="167" formatCode="[$-409]0.000000"/></numFmts>');
-  }
-  return xml.replace(/<cellXfs\b[^>]*>[\s\S]*?<\/cellXfs>/, (cellXfs) => {
-    let index = -1;
-    return cellXfs.replace(/<xf\b[^>]*\/>/g, (style) => {
-      index += 1;
-      if (index !== 166) return style;
-      let updated = style.replace(/numFmtId="\d+"/, 'numFmtId="167"');
-      updated = updated.replace(/\s+applyNumberFormat="[^"]*"/, "");
-      return updated.replace("/>", ' applyNumberFormat="1"/>');
-    });
-  });
+function writeFormula(xml: string, cell: string, formula: string, cached: string, type: "number" | "string" = "number") {
+  const populated = new RegExp(`<c r="${cell}"([^>]*)>.*?<\\/c>`);
+  const existing = populated.exec(xml);
+  if (!existing) return xml;
+  const attributes = existing[1].replace(/\s+t="[^"]*"/g, "");
+  const escapedFormula = formula.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const escapedValue = cached.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const rendered = `<c r="${cell}"${attributes}${type === "string" ? ' t="str"' : ""}><f>${escapedFormula}</f><v>${escapedValue}</v></c>`;
+  return xml.replace(existing[0], rendered);
+}
+
+function normalizeCoordinateHelper(xml: string, helperRow: number, sourceRow: number, lat: number, lon: number) {
+  const latitude = lat.toFixed(6);
+  const longitude = lon.toFixed(6);
+  const parse = (sourceCell: string) => `IF(ISNUMBER('QAF628'!${sourceCell}),'QAF628'!${sourceCell},NUMBERVALUE('QAF628'!${sourceCell},".",","))`;
+  xml = writeFormula(xml, `I${helperRow}`, parse(`C${sourceRow}`), latitude);
+  xml = writeFormula(xml, `J${helperRow}`, parse(`E${sourceRow}`), longitude);
+  xml = writeFormula(xml, `V${helperRow}`, `IF(AND(ISNUMBER(I${helperRow}),ISNUMBER(J${helperRow})),SUBSTITUTE(TEXT(I${helperRow},"0.000000"),",",".")&", "&SUBSTITUTE(TEXT(J${helperRow},"0.000000"),",","."),"")`, `${latitude}, ${longitude}`, "string");
+  const statusFormula = `IF(AND(ISBLANK(I${helperRow}),ISBLANK(J${helperRow})),"",IF(U${helperRow},T${helperRow}&", "&T${helperRow + 1},"nu e acelasi mod de completare"))`;
+  return writeFormula(xml, `W${helperRow}`, statusFormula, "LAT ok, LONG ok", "string");
 }
 
 function localPlacement(timestamp: number | undefined) {
@@ -199,9 +204,6 @@ export async function buildOrangeQafXlsx(projectId: string) {
   const files = await unzip(new Uint8Array(await response.arrayBuffer()));
   const documentation = await orangeDocumentation(projectId);
   if (!documentation) throw new Error("Tichetul Orange nu a fost găsit.");
-  const styles = files.find((file) => file.name === "xl/styles.xml");
-  if (!styles) throw new Error("Șablonul QAF Orange nu conține stilurile Excel.");
-  styles.content = encoder.encode(useDotDecimalForCoordinates(decoder.decode(styles.content)));
   const quantities = new Map<string, number>();
   for (const item of documentation.materials) {
     const quantity = Number(item.quantity);
@@ -234,6 +236,8 @@ export async function buildOrangeQafXlsx(projectId: string) {
   servicesSheet.content = encoder.encode(servicesXml);
   const main = files.find((file) => file.name === "xl/worksheets/sheet1.xml");
   if (!main) throw new Error("Șablonul QAF Orange nu conține foaia principală.");
+  const helper = files.find((file) => file.name === "xl/worksheets/sheet6.xml");
+  if (!helper) throw new Error("Șablonul QAF Orange nu conține formulele auxiliare.");
   const location = documentation.damageLocation;
   const arrived = localPlacement(documentation.arrivedAt);
   const located = localPlacement(location?.placedAt ?? documentation.documentedAt);
@@ -249,14 +253,24 @@ export async function buildOrangeQafXlsx(projectId: string) {
     if (value) mainXml = writeText(mainXml, cell, value);
   }
   if (documentation.cableCapacity > 0) mainXml = writeNumber(mainXml, "D11", documentation.cableCapacity);
+  let helperXml = decoder.decode(helper.content);
   if (location && Number.isFinite(location.lat) && Number.isFinite(location.lon)) {
-    mainXml = writeNumber(mainXml, "C34", Number(location.lat!.toFixed(6)));
-    mainXml = writeNumber(mainXml, "E34", Number(location.lon!.toFixed(6)));
+    const latitude = location.lat!.toFixed(6);
+    const longitude = location.lon!.toFixed(6);
+    mainXml = writeText(mainXml, "C34", latitude);
+    mainXml = writeText(mainXml, "E34", longitude);
+    helperXml = normalizeCoordinateHelper(helperXml, 1, 34, location.lat!, location.lon!);
+    mainXml = writeFormula(mainXml, "C35", 'IF(AND(ISBLANK(C34),ISBLANK(E34)),"",IF(\'Nu sterge\'!W1="LAT ok, LONG ok",HYPERLINK(CONCATENATE("http://maps.google.com/maps?q=",\'Nu sterge\'!V1)),\'Nu sterge\'!W1))', `http://maps.google.com/maps?q=${latitude}, ${longitude}`, "string");
   }
   documentation.newJunctions.forEach((junction, index) => {
     const row = 41 + index;
-    mainXml = writeNumber(mainXml, `C${row}`, Number(junction.lat!.toFixed(6)));
-    mainXml = writeNumber(mainXml, `E${row}`, Number(junction.lon!.toFixed(6)));
+    const latitude = junction.lat!.toFixed(6);
+    const longitude = junction.lon!.toFixed(6);
+    mainXml = writeText(mainXml, `C${row}`, latitude);
+    mainXml = writeText(mainXml, `E${row}`, longitude);
+    helperXml = normalizeCoordinateHelper(helperXml, 7 + index * 3, row, junction.lat!, junction.lon!);
+    const helperRow = 7 + index * 3;
+    mainXml = writeFormula(mainXml, `G${row}`, `IF(AND(ISBLANK(C${row}),ISBLANK(E${row})),"",IF('Nu sterge'!W${helperRow}="LAT ok, LONG ok",HYPERLINK(CONCATENATE("http://maps.google.com/maps?q=",'Nu sterge'!V${helperRow})),'Nu sterge'!W${helperRow}))`, `http://maps.google.com/maps?q=${latitude}, ${longitude}`, "string");
     mainXml = writeText(mainXml, `C${46 + index}`, qafJunctionNicmName(projectId, index + 1));
   });
   if (documentation.siteMeasurement) {
@@ -274,6 +288,14 @@ export async function buildOrangeQafXlsx(projectId: string) {
     mainXml = writeText(mainXml, `G${row}`, timestamp.time);
   }
   main.content = encoder.encode(mainXml);
+  helper.content = encoder.encode(helperXml);
+
+  const workbookXml = files.find((file) => file.name === "xl/workbook.xml");
+  if (workbookXml) {
+    let xml = decoder.decode(workbookXml.content);
+    xml = xml.replace(/<calcPr\b([^>]*)\/>/, (_match, attributes: string) => `<calcPr${attributes.replace(/\s+(?:calcMode|fullCalcOnLoad|forceFullCalc)="[^"]*"/g, "")} calcMode="auto" fullCalcOnLoad="1" forceFullCalc="1"/>`);
+    workbookXml.content = encoder.encode(xml);
+  }
 
   const workbook = zipPackage(files);
   return workbook.buffer.slice(workbook.byteOffset, workbook.byteOffset + workbook.byteLength) as ArrayBuffer;
