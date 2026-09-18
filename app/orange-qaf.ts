@@ -143,6 +143,19 @@ function writeNumber(xml: string, cell: string, value: number) {
   return writeQuantity(xml, cell, value);
 }
 
+function writeMapsLink(xml: string, cell: string, lat: number, lon: number) {
+  const latitude = lat.toFixed(6);
+  const longitude = lon.toFixed(6);
+  const formula = `HYPERLINK("https://maps.google.com/?q=${latitude},${longitude}","Deschide Google Maps")`;
+  const selfClosing = new RegExp(`<c r="${cell}"([^>]*)\\/>`);
+  const populated = new RegExp(`<c r="${cell}"([^>]*)>.*?<\\/c>`);
+  const render = (attributes: string) => `<c r="${cell}"${attributes.replace(/\s+t="[^"]*"/g, "")} t="str"><f>${formula}</f><v>Deschide Google Maps</v></c>`;
+  const empty = selfClosing.exec(xml);
+  if (empty) return xml.replace(empty[0], render(empty[1]));
+  const existing = populated.exec(xml);
+  return existing ? xml.replace(existing[0], render(existing[1])) : xml;
+}
+
 function writeText(xml: string, cell: string, value: string) {
   const selfClosing = new RegExp(`<c r="${cell}"([^>]*)\\/>`);
   const populated = new RegExp(`<c r="${cell}"([^>]*)>.*?<\\/c>`);
@@ -230,11 +243,13 @@ export async function buildOrangeQafXlsx(projectId: string) {
   if (location && Number.isFinite(location.lat) && Number.isFinite(location.lon)) {
     mainXml = writeNumber(mainXml, "C34", Number(location.lat!.toFixed(6)));
     mainXml = writeNumber(mainXml, "E34", Number(location.lon!.toFixed(6)));
+    mainXml = writeMapsLink(mainXml, "G34", location.lat!, location.lon!);
   }
   documentation.newJunctions.forEach((junction, index) => {
     const row = 41 + index;
     mainXml = writeNumber(mainXml, `C${row}`, Number(junction.lat!.toFixed(6)));
     mainXml = writeNumber(mainXml, `E${row}`, Number(junction.lon!.toFixed(6)));
+    mainXml = writeMapsLink(mainXml, `G${row}`, junction.lat!, junction.lon!);
     mainXml = writeText(mainXml, `C${46 + index}`, qafJunctionNicmName(projectId, index + 1));
   });
   if (documentation.siteMeasurement) {
