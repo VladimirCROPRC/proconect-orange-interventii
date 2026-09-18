@@ -81,6 +81,8 @@ test("QAF records the coordinator who validates the intervention", async () => {
   assert.match(qaf, /writeCachedValuePreservingFormula\(mainXml, "F79", validationDate, "string"\)/);
   assert.doesNotMatch(qaf, /writeFormula\(mainXml, "F79"/);
   assert.match(qaf, /validatedBy \? row\.documentation_updated_at \?\? row\.updated_at/);
+  const cachedWriter = qaf.slice(qaf.indexOf("function writeCachedValuePreservingFormula"), qaf.indexOf("function normalizeCoordinateHelper"));
+  assert.ok(cachedWriter.indexOf("selfClosing.test(xml)") < cachedWriter.indexOf("populated.exec(xml)"));
 });
 
 test("QAF preserves the original workbook hyperlink formulas", async () => {
