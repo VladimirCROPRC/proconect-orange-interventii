@@ -288,6 +288,13 @@ export async function buildOrangeQafXlsx(projectId: string) {
     mainXml = writeNumber(mainXml, `E${row}`, timestamp.year);
     mainXml = writeText(mainXml, `G${row}`, timestamp.time);
   }
+  if (finalized) {
+    mainXml = writeNumber(mainXml, "C79", finalized.day);
+    mainXml = writeNumber(mainXml, "D79", finalized.month);
+    mainXml = writeNumber(mainXml, "E79", finalized.year);
+    const validationDate = `${String(finalized.day).padStart(2, "0")}/${String(finalized.month).padStart(2, "0")}/${finalized.year}`;
+    mainXml = writeFormula(mainXml, "F79", 'CONCATENATE(IF(C79<10,"0"&C79,C79),"/",IF(D79<10,"0"&D79,D79),"/",E79)', validationDate, "string");
+  }
   main.content = encoder.encode(mainXml);
   helper.content = encoder.encode(helperXml);
 
