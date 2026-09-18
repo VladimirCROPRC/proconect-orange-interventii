@@ -1,5 +1,5 @@
 import * as google from "./google-drive-server";
-import { backupMode, deleteOneDriveFileCopy, queueOneDrive } from "./onedrive-server";
+import { backupMode, deleteOneDriveFileCopy, queueOneDrive, syncOrangeTicketWorkbook } from "./onedrive-server";
 import { usesGoogle } from "./onedrive-core";
 import { getFileRow } from "./project-server";
 
@@ -13,7 +13,17 @@ async function both(kind: "file" | "project", id: string, googleSync: () => Prom
   for (const result of outcomes) if (result.status === "rejected") console.error("Backup destination requires retry");
 }
 export const syncProjectIfConnected = (id: string) => both("project", id, () => google.syncProjectIfConnected(id));
-export const syncReportIfConnected = (id: string) => both("project", id, () => google.syncReportIfConnected(id));
+export async function syncReportIfConnected(id: string) {
+  const mode = await backupMode();
+  // Field actions update Excel Online immediately. The queued project export
+  // still regenerates QAF/KMZ and provides an automatic retry path.
+  const outcomes = await Promise.allSettled([
+    queueOneDrive("project", id),
+    usesOneDrive(mode) ? syncOrangeTicketWorkbook(id) : Promise.resolve(),
+    usesGoogle(mode) ? google.syncReportIfConnected(id) : Promise.resolve(),
+  ]);
+  for (const result of outcomes) if (result.status === "rejected") console.error("Drive report refresh requires retry");
+}
 export async function syncFileIfConnected(id: string) {
   await both("file", id, () => google.syncFileIfConnected(id));
   const file = await getFileRow(id);
