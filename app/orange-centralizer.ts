@@ -120,17 +120,18 @@ function bucharestTimestamp(value: unknown) {
   }).format(new Date(value));
 }
 
-function closingTimestamp(validatedAt: unknown, closingTime: unknown) {
+function closingTimestamp(validatedAt: unknown, closingDate: unknown, closingTime: unknown) {
   const timestamp = bucharestTimestamp(validatedAt);
-  if (!timestamp || typeof closingTime !== "string" || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(closingTime)) return timestamp;
-  return timestamp.replace(/\d{2}:\d{2}$/, closingTime);
+  if (typeof closingDate !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(closingDate) || typeof closingTime !== "string" || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(closingTime)) return timestamp;
+  const [year, month, day] = closingDate.split("-");
+  return `${day}.${month}.${year}, ${closingTime}`;
 }
 
 function projectValues(project: ProjectRow) {
   let intervention: {
     assessment?: { cause?: string; arrivedAt?: number; documentedAt?: number; incidentDescription?: string; damageLocation?: { lat?: number; lon?: number; placedAt?: number } };
     execution?: { remediationDescription?: string };
-    documentation?: { validatedAt?: number; validatedBy?: string; closingTime?: string; incidentDescription?: string; remediationDescription?: string };
+    documentation?: { validatedAt?: number; validatedBy?: string; closingDate?: string; closingTime?: string; incidentDescription?: string; remediationDescription?: string };
   } = {};
   try { intervention = project.content_json ? (JSON.parse(project.content_json).intervention ?? {}) : {}; } catch { intervention = {}; }
   const assessment = intervention.assessment;
@@ -149,7 +150,7 @@ function projectValues(project: ProjectRow) {
     created: bucharestTimestamp(project.created_at),
     arrived: bucharestTimestamp(assessment?.arrivedAt),
     located: bucharestTimestamp(location?.placedAt ?? assessment?.documentedAt),
-    completed: closingTimestamp(validated?.validatedAt, validated?.closingTime),
+    completed: closingTimestamp(validated?.validatedAt, validated?.closingDate, validated?.closingTime),
     capacity: project.cable_capacity,
     cause: validated?.incidentDescription ?? assessment?.incidentDescription ?? project.requirements,
     incident: "",
