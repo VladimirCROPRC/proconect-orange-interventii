@@ -81,6 +81,7 @@ async function orangeDocumentation(projectId: string) {
   let remediationDescription = "";
   let validatedAt: number | undefined;
   let validatedBy = "";
+  let closingTime = "";
   let services: Array<{ code?: string; quantity?: number }> = [];
   let cause = "";
   let assessedCableCapacity = 0;
@@ -91,7 +92,7 @@ async function orangeDocumentation(projectId: string) {
         intervention?: {
           assessment?: { cause?: string; arrivedAt?: number; incidentDescription?: string; damageLocation?: DamageLocation; documentedAt?: number; siteMeasurement?: SiteMeasurement; cableCapacity?: number; routeType?: string };
           execution?: { materials?: Material[]; activities?: ExecutionActivity[]; remediationDescription?: string };
-          documentation?: { incidentDescription?: string; remediationDescription?: string; services?: Array<{ code?: string; quantity?: number }>; validatedAt?: number; validatedBy?: string };
+          documentation?: { incidentDescription?: string; remediationDescription?: string; services?: Array<{ code?: string; quantity?: number }>; validatedAt?: number; validatedBy?: string; closingTime?: string };
         };
       };
       materials = Array.isArray(documentation.intervention?.execution?.materials) ? documentation.intervention!.execution!.materials! : [];
@@ -104,6 +105,7 @@ async function orangeDocumentation(projectId: string) {
       remediationDescription = documentation.intervention?.documentation?.remediationDescription ?? documentation.intervention?.execution?.remediationDescription ?? "";
       validatedAt = documentation.intervention?.documentation?.validatedAt;
       validatedBy = documentation.intervention?.documentation?.validatedBy?.trim() ?? "";
+      closingTime = documentation.intervention?.documentation?.closingTime?.trim() ?? "";
       services = Array.isArray(documentation.intervention?.documentation?.services) ? documentation.intervention!.documentation!.services! : [];
       cause = documentation.intervention?.assessment?.cause ?? "";
       assessedCableCapacity = Number(documentation.intervention?.assessment?.cableCapacity) || 0;
@@ -121,7 +123,7 @@ async function orangeDocumentation(projectId: string) {
     ?? (validatedBy ? row.documentation_updated_at ?? row.updated_at : undefined)
     ?? (row.status === "Finalizat" ? row.updated_at : undefined);
   return {
-    materials, damageLocation, documentedAt, cause, siteMeasurement, arrivedAt, incidentDescription, remediationDescription, validatedAt: validationTimestamp, validatedBy, services,
+    materials, damageLocation, documentedAt, cause, siteMeasurement, arrivedAt, incidentDescription, remediationDescription, validatedAt: validationTimestamp, validatedBy, closingTime, services,
     measurementPhotoNames: (measurementPhotos.results ?? []).map((photo) => photo.original_name).filter(Boolean),
     newJunctions: activities
       .filter((activity) => activity.type === "junction-installation" && activity.junction?.kind === "new")
@@ -264,7 +266,10 @@ export async function buildOrangeQafXlsx(projectId: string) {
   const location = documentation.damageLocation;
   const arrived = localPlacement(documentation.arrivedAt);
   const located = localPlacement(location?.placedAt ?? documentation.documentedAt);
-  const finalized = localPlacement(documentation.validatedAt);
+  const finalizedDate = localPlacement(documentation.validatedAt);
+  const finalized = finalizedDate
+    ? { ...finalizedDate, time: /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(documentation.closingTime) ? documentation.closingTime : finalizedDate.time }
+    : null;
   let mainXml = decoder.decode(main.content);
   const textCells: Array<[string, string]> = [
     ["D5", documentation.siteA], ["K5", documentation.siteB], ["D7", documentation.foSectionName],
