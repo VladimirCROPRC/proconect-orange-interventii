@@ -176,6 +176,7 @@ export type InterventionDocumentationSummary = {
   incidentDescription?: string;
   remediationDescription?: string;
   services?: InterventionServiceSelection[];
+  warehouseId?: string;
   validatedAt: number;
   validatedBy: string;
 };
