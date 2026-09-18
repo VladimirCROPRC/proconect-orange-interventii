@@ -103,6 +103,17 @@ function validWorkIdentifier(value: string, activityType: ProjectActivityType) {
     : /^RID\d{1,24}$/i.test(value);
 }
 
+function normalizeRequestDate(value: unknown) {
+  if (typeof value !== "string" || !value.trim()) return "";
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
+  if (!match) return "";
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  return parsed.getUTCFullYear() === year && parsed.getUTCMonth() === month - 1 && parsed.getUTCDate() === day ? value.trim() : "";
+}
+
 export function hasValidPhotoCoordinates(value: string) {
   const coordinates = /^(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)(?:\s|$)/.exec(value.trim());
   if (!coordinates) return false;
@@ -303,20 +314,17 @@ export async function createProject(input: ProjectRecord, createdBy: Authenticat
     };
   }
   const orangeDetails = normalizeOrangeDetails(input, activityType);
-  const required = activityType === "Intervenție Orange"
-    ? [input.client, input.requirements, input.technician, orangeDetails.foSectionName, orangeDetails.topology, orangeDetails.orangeInterventionType, orangeDetails.sla, orangeDetails.departureLocality, orangeDetails.county]
-    : [input.client, input.address, input.contact, input.phone, input.requirements, input.technician, ...(activityType === "Instalare" ? [input.cpe] : [])];
-  if (required.some((value) => typeof value !== "string" || !value.trim())) {
-    return { error: "Completează toate informațiile obligatorii ale proiectului.", status: 400 as const };
-  }
+  if (input.county?.trim() && !orangeDetails.county) return { error: "Selectează județul din lista disponibilă.", status: 400 as const };
+  const requestDate = normalizeRequestDate(input.date);
+  if (input.date?.trim() && !requestDate) return { error: "Data solicitării intervenției nu este validă.", status: 400 as const };
   const existing = await getRawDb().prepare("SELECT id FROM projects WHERE id = ? LIMIT 1").bind(workId).first();
   if (existing) return { error: activityType === "Intervenție" || activityType === "Intervenție Orange" ? "Numărul tichetului există deja. Verifică valoarea introdusă." : "Request ID există deja. Verifică numărul introdus.", status: 409 as const };
 
-  const technician = await getRawDb()
+  const technician = input.technician?.trim() ? await getRawDb()
     .prepare("SELECT username, name FROM app_users WHERE name = ? AND role = 'Tehnician' AND active = 1 LIMIT 1")
-    .bind(input.technician)
-    .first<{ username: string; name: string }>();
-  if (!technician) return { error: "Tehnicianul selectat nu este disponibil.", status: 400 as const };
+    .bind(input.technician.trim())
+    .first<{ username: string; name: string }>() : null;
+  if (input.technician?.trim() && !technician) return { error: "Tehnicianul selectat nu este disponibil.", status: 400 as const };
 
   const normalizedCpe = typeof input.cpe === "string" ? input.cpe.trim() : "";
   const catalogItem = activityType === "Instalare"
@@ -334,25 +342,25 @@ export async function createProject(input: ProjectRecord, createdBy: Authenticat
     activityType,
     orderNumber: activityType === "Intervenție" && typeof input.orderNumber === "string" ? input.orderNumber.trim().slice(0, 100) : "",
     ...orangeDetails,
-    client: input.client.trim(),
-    address: input.address.trim(),
-    contact: input.contact.trim(),
-    phone: input.phone.trim(),
-    email: input.email.trim(),
-    requirements: input.requirements.trim(),
-    technician: technician.name,
+    client: typeof input.client === "string" ? input.client.trim() : "",
+    address: typeof input.address === "string" ? input.address.trim() : "",
+    contact: typeof input.contact === "string" ? input.contact.trim() : "",
+    phone: typeof input.phone === "string" ? input.phone.trim() : "",
+    email: typeof input.email === "string" ? input.email.trim() : "",
+    requirements: typeof input.requirements === "string" ? input.requirements.trim() : "",
+    technician: technician?.name ?? "",
     cpe: catalogItem?.name ?? "",
     cpeRequiresGrounding: Boolean(catalogItem?.requires_grounding),
     mc: Boolean(input.mc),
     mcType,
     status: "Planificat",
-    date: input.date || "Astăzi",
+    date: requestDate,
     ipwo: input.ipwo || "Fișier neîncărcat",
     splice: input.splice || "Fișier neîncărcat",
   };
   await getRawDb().batch([
-    insertProjectStatement(project, technician.username, createdBy.username),
-    getRawDb().prepare("UPDATE app_users SET jobs = jobs + 1, updated_at = ? WHERE username = ?").bind(Date.now(), technician.username),
+    insertProjectStatement(project, technician?.username ?? "", createdBy.username),
+    ...(technician ? [getRawDb().prepare("UPDATE app_users SET jobs = jobs + 1, updated_at = ? WHERE username = ?").bind(Date.now(), technician.username)] : []),
   ]);
   return { project };
 }
@@ -364,15 +372,9 @@ export async function updateProject(input: ProjectRecord) {
     return { error: activityType === "Intervenție" || activityType === "Intervenție Orange" ? "Numărul tichetului nu este valid." : "Request ID-ul proiectului nu este valid.", status: 400 as const };
   }
   const orangeDetails = normalizeOrangeDetails(input, activityType);
-  const required = activityType === "Intervenție Orange"
-    ? [input.client, input.requirements, input.technician, orangeDetails.foSectionName, orangeDetails.topology, orangeDetails.routeType, orangeDetails.orangeInterventionType, orangeDetails.sla, orangeDetails.departureLocality, orangeDetails.county]
-    : [input.client, input.address, input.contact, input.phone, input.requirements, input.technician, ...(activityType === "Instalare" ? [input.cpe] : [])];
-  if (required.some((value) => typeof value !== "string" || !value.trim())) {
-    return { error: "Completează toate informațiile obligatorii ale proiectului.", status: 400 as const };
-  }
-  if (activityType === "Intervenție Orange" && (!Number.isInteger(orangeDetails.cableCapacity) || orangeDetails.cableCapacity < 1 || orangeDetails.cableCapacity > 10000)) {
-    return { error: "Introdu o capacitate validă a cablului.", status: 400 as const };
-  }
+  if (input.county?.trim() && !orangeDetails.county) return { error: "Selectează județul din lista disponibilă.", status: 400 as const };
+  const requestDate = normalizeRequestDate(input.date);
+  if (input.date?.trim() && !requestDate) return { error: "Data solicitării intervenției nu este validă.", status: 400 as const };
   if (!["Planificat", "În desfășurare", "De verificat", "Finalizat"].includes(input.status)) {
     return { error: "Statusul proiectului nu este valid.", status: 400 as const };
   }
@@ -380,11 +382,11 @@ export async function updateProject(input: ProjectRecord) {
   const existing = await getRawDb().prepare("SELECT * FROM projects WHERE id = ? LIMIT 1").bind(input.id.toUpperCase()).first<ProjectRow>();
   if (!existing) return { error: "Proiectul selectat nu există.", status: 404 as const };
 
-  const technician = await getRawDb()
+  const technician = input.technician?.trim() ? await getRawDb()
     .prepare("SELECT username, name FROM app_users WHERE name = ? AND role = 'Tehnician' AND active = 1 LIMIT 1")
     .bind(input.technician.trim())
-    .first<{ username: string; name: string }>();
-  if (!technician) return { error: "Tehnicianul selectat nu este disponibil.", status: 400 as const };
+    .first<{ username: string; name: string }>() : null;
+  if (input.technician?.trim() && !technician) return { error: "Tehnicianul selectat nu este disponibil.", status: 400 as const };
 
   const normalizedCpe = typeof input.cpe === "string" ? input.cpe.trim() : "";
   const catalogItem = activityType === "Instalare" && normalizedCpe !== existing.cpe
@@ -402,20 +404,20 @@ export async function updateProject(input: ProjectRecord) {
     activityType,
     orderNumber: activityType === "Intervenție" && typeof input.orderNumber === "string" ? input.orderNumber.trim().slice(0, 100) : "",
     ...orangeDetails,
-    client: input.client.trim(),
-    address: input.address.trim(),
-    contact: input.contact.trim(),
-    phone: input.phone.trim(),
+    client: typeof input.client === "string" ? input.client.trim() : "",
+    address: typeof input.address === "string" ? input.address.trim() : "",
+    contact: typeof input.contact === "string" ? input.contact.trim() : "",
+    phone: typeof input.phone === "string" ? input.phone.trim() : "",
     email: typeof input.email === "string" ? input.email.trim() : "",
-    requirements: input.requirements.trim(),
-    technician: technician.name,
+    requirements: typeof input.requirements === "string" ? input.requirements.trim() : "",
+    technician: technician?.name ?? "",
     cpe: activityType === "Instalare" ? (catalogItem?.name ?? existing.cpe) : "",
     cpeRequiresGrounding: activityType === "Instalare" ? Boolean(catalogItem ? catalogItem.requires_grounding : existing.cpe_requires_grounding) : false,
     sfp: Boolean(input.sfp),
     mc: Boolean(input.mc),
     mcType,
     terminalBox: Boolean(input.terminalBox),
-    date: typeof input.date === "string" && input.date.trim() ? input.date.trim() : existing.scheduled_label,
+    date: requestDate,
     ipwo: typeof input.ipwo === "string" && input.ipwo.trim() ? input.ipwo.trim() : existing.ipwo,
     splice: typeof input.splice === "string" && input.splice.trim() ? input.splice.trim() : existing.splice,
   };
@@ -441,7 +443,7 @@ export async function updateProject(input: ProjectRecord) {
       project.email,
       project.requirements,
       project.technician,
-      technician.username,
+      technician?.username ?? "",
       project.cpe,
       project.cpeRequiresGrounding ? 1 : 0,
       project.sfp ? 1 : 0,
@@ -457,11 +459,9 @@ export async function updateProject(input: ProjectRecord) {
     ),
   ];
 
-  if (existing.technician_username !== technician.username) {
-    statements.push(
-      getRawDb().prepare("UPDATE app_users SET jobs = CASE WHEN jobs > 0 THEN jobs - 1 ELSE 0 END, updated_at = ? WHERE username = ?").bind(now, existing.technician_username),
-      getRawDb().prepare("UPDATE app_users SET jobs = jobs + 1, updated_at = ? WHERE username = ?").bind(now, technician.username),
-    );
+  if (existing.technician_username !== (technician?.username ?? "")) {
+    if (existing.technician_username) statements.push(getRawDb().prepare("UPDATE app_users SET jobs = CASE WHEN jobs > 0 THEN jobs - 1 ELSE 0 END, updated_at = ? WHERE username = ?").bind(now, existing.technician_username));
+    if (technician) statements.push(getRawDb().prepare("UPDATE app_users SET jobs = jobs + 1, updated_at = ? WHERE username = ?").bind(now, technician.username));
   }
 
   await getRawDb().batch(statements);
