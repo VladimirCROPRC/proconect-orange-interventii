@@ -245,7 +245,9 @@ export async function syncOrangeTicketWorkbook(projectId: string) {
     await graphJson(ticketColumn);
   }
 
-  const values = Array.from({ length: 30 }, () => "") as Array<string | number>;
+  // Table1 in the existing ENO3 centralizer spans A:AE (31 columns).
+  // Microsoft Graph rejects rows whose value count differs from the table width.
+  const values = Array.from({ length: 31 }, () => "") as Array<string | number>;
   values[1] = project.fo_section_name;
   values[3] = project.id;
   values[4] = project.departure_locality;
@@ -431,7 +433,6 @@ async function uploadJob(c: Connection, job: Job) {
     const activity: OneDriveActivity = project.activity_type && project.activity_type in oneDriveActivityFolders ? project.activity_type : "Instalare";
     if (activity === "Intervenție Orange") {
       const projectFolder = await orangeProjectDestination(token, c.root_id, job.item_id);
-      await syncOrangeTicketWorkbook(job.item_id);
       const qaf = await buildOrangeQafXlsx(job.item_id);
       const shortTicket = shortOrangeTicket(job.item_id);
       const filename = `${readableFolderName(shortTicket)}.xlsx`;
@@ -447,6 +448,9 @@ async function uploadJob(c: Connection, job: Job) {
         body: kmz,
       }));
       await folder(token, projectFolder.id, shortTicket);
+      // Update the centralizer last. A workbook failure must not prevent the
+      // QAF, KMZ and photo destination from reaching OneDrive.
+      await syncOrangeTicketWorkbook(job.item_id);
       return;
     }
     const activityFolder = await folder(token, c.root_id, oneDriveActivityFolders[activity]);
