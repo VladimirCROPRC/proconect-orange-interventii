@@ -73,10 +73,12 @@ export async function adjustInventory(input: { warehouseId?: unknown; source?: u
   return { adjusted: true };
 }
 
-export async function buildInterventionConsumptionStatements(projectId: string, technicianUsername: string, materials: InterventionMaterialSelection[], account: AuthenticatedAccount, now: number) {
+export async function buildInterventionConsumptionStatements(projectId: string, technicianUsername: string, materials: InterventionMaterialSelection[], account: AuthenticatedAccount, now: number, selectedWarehouseId?: string) {
   if (!materials.length) return { statements: [] as D1PreparedStatement[] };
-  const warehouse = await getRawDb().prepare("SELECT w.id, w.name FROM technician_warehouses tw INNER JOIN warehouses w ON w.id = tw.warehouse_id WHERE tw.technician_username = ? AND w.active = 1 LIMIT 1").bind(technicianUsername).first<{ id: string; name: string }>();
-  if (!warehouse) return { error: "Tehnicianul intervenției nu este alocat unei magazii. Configurează alocarea în Management → Materiale.", status: 409 as const };
+  const warehouse = selectedWarehouseId
+    ? await getRawDb().prepare("SELECT id, name FROM warehouses WHERE id = ? AND active = 1 LIMIT 1").bind(selectedWarehouseId).first<{ id: string; name: string }>()
+    : await getRawDb().prepare("SELECT w.id, w.name FROM technician_warehouses tw INNER JOIN warehouses w ON w.id = tw.warehouse_id WHERE tw.technician_username = ? AND w.active = 1 LIMIT 1").bind(technicianUsername).first<{ id: string; name: string }>();
+  if (!warehouse) return { error: selectedWarehouseId ? "Magazia selectată pentru consum nu este disponibilă." : "Tehnicianul intervenției nu este alocat unei magazii. Configurează alocarea în Management → Materiale.", status: 409 as const };
 
   const existing = await getRawDb().prepare("SELECT project_id FROM project_inventory_consumption WHERE project_id = ? LIMIT 1").bind(projectId).first();
   if (existing) return { statements: [] as D1PreparedStatement[] };
