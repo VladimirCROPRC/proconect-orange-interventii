@@ -176,6 +176,7 @@ export function InterventionOperationsSection({
   const [reviewServices, setReviewServices] = useState(initialSummary?.documentation?.services ?? []);
   const [serviceCode, setServiceCode] = useState("");
   const [serviceQuantity, setServiceQuantity] = useState("1");
+  const [closingDate, setClosingDate] = useState(initialSummary?.documentation?.closingDate ?? "");
   const [closingTime, setClosingTime] = useState(initialSummary?.documentation?.closingTime ?? "");
 
   useEffect(() => {
@@ -239,6 +240,7 @@ export function InterventionOperationsSection({
       if (mounted) setReviewMaterials(initialSummary?.execution?.materials ?? []);
       if (mounted) setSelectedWarehouseId(initialSummary?.documentation?.warehouseId ?? "");
       if (mounted) setReviewServices(initialSummary?.documentation?.services ?? []);
+      if (mounted) setClosingDate(initialSummary?.documentation?.closingDate ?? "");
       if (mounted) setClosingTime(initialSummary?.documentation?.closingTime ?? "");
     });
     return () => {
@@ -257,15 +259,18 @@ export function InterventionOperationsSection({
     && Number.isFinite(siteMeasurementLengthMeters) && siteMeasurementLengthMeters > 0
     && validSiteMeasurementPhotos.length > 0;
   const orangeIntervention = project.activityType === "Intervenție Orange";
-  const completedItems = Number(Boolean(damageType)) + Number(validPhotos.length > 0) + Number(!orangeIntervention || Boolean(damageLocation)) + Number(!orangeIntervention || Boolean(cause));
+  const requiredAssessmentPhotos = damageType === "FO cut" ? 3 : 1;
+  const assessmentPhotosReady = validPhotos.length >= requiredAssessmentPhotos;
+  const completedItems = Number(Boolean(damageType)) + Number(assessmentPhotosReady) + Number(!orangeIntervention || Boolean(damageLocation)) + Number(!orangeIntervention || Boolean(cause));
   const progress = Math.round((completedItems / (orangeIntervention ? 4 : 2)) * 100);
-  const ready = Boolean(damageType) && Boolean(arrivedAt) && Boolean(incidentDescription.trim()) && validPhotos.length > 0 && siteMeasurementReady && (!orangeIntervention || (Boolean(cause) && Boolean(damageLocation)));
+  const ready = Boolean(damageType) && Boolean(arrivedAt) && Boolean(incidentDescription.trim()) && assessmentPhotosReady && siteMeasurementReady && (!orangeIntervention || (Boolean(cause) && Boolean(damageLocation)));
   const executionActivities = initialSummary?.execution?.activities ?? [];
   const totalExecutionPhotos = executionActivities.reduce((total, activity) => total + activity.photoCount, 0);
   const totalCableMeters = executionActivities.reduce((total, activity) => total + (activity.type === "fo-installation" ? activity.cableLengthMeters ?? 0 : 0), 0);
   const reportReady = report.trim().length >= 20 && report.trim().length <= 5_000;
+  const closingDateReady = /^\d{4}-\d{2}-\d{2}$/.test(closingDate);
   const closingTimeReady = /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(closingTime);
-  const canFinalize = Boolean(canEdit && initialSummary?.assessment && executionActivities.length && reportReady && closingTimeReady && project.status !== "Finalizat");
+  const canFinalize = Boolean(canEdit && initialSummary?.assessment && executionActivities.length && reportReady && closingDateReady && closingTimeReady && project.status !== "Finalizat");
 
   async function addPhotos(selectedFiles: File[], category: "damage" | "site-measurement" = "damage") {
     if (!selectedFiles.length) return;
@@ -312,11 +317,12 @@ export function InterventionOperationsSection({
 
   async function saveAssessment(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!damageType || !arrivedAt || !incidentDescription.trim() || !validPhotos.length || !siteMeasurementReady || (orangeIntervention && (!cause || !damageLocation || !cableDetailsReady))) {
+    if (!damageType || !arrivedAt || !incidentDescription.trim() || !assessmentPhotosReady || !siteMeasurementReady || (orangeIntervention && (!cause || !damageLocation || !cableDetailsReady))) {
       setError(!siteMeasurementReady
         ? "Completează codul site-ului, lungimea OTDR și fotografia măsurătorii cu GPS valid."
         : !cableDetailsReady ? "Completează capacitatea cablului și tipul traseului constatate în teren."
-        : orangeIntervention ? "Selectează tipul și cauza avariei, amplasează locația pe hartă și adaugă cel puțin o fotografie cu GPS valid." : "Selectează tipul avariei și adaugă cel puțin o fotografie cu GPS valid.");
+        : !assessmentPhotosReady ? (damageType === "FO cut" ? "Pentru FO cut sunt obligatorii cel puțin 3 fotografii cu GPS valid." : "Adaugă cel puțin o fotografie cu GPS valid.")
+        : orangeIntervention ? "Selectează tipul și cauza avariei și amplasează locația pe hartă." : "Selectează tipul avariei.");
       return;
     }
 
@@ -372,6 +378,7 @@ export function InterventionOperationsSection({
           report: report.trim(),
           incidentDescription: reviewIncident.trim(),
           remediationDescription: reviewRemediation.trim(),
+          closingDate,
           closingTime,
           services: reviewServices,
           ...(selectedWarehouseId ? { warehouseId: selectedWarehouseId } : {}),
@@ -533,8 +540,8 @@ export function InterventionOperationsSection({
               {orangeIntervention && <DamageLocationPicker value={damageLocation} onChange={(location) => setDamageLocation({ ...location, placedAt: Date.now() })} onNotify={onNotify} />}
 
               <div className="intervention-photo-heading">
-                <div><h3>Fotografii constatare</h3><p>Imagini clare din care reiese natura avariei.</p></div>
-                <span>{validPhotos.length} {validPhotos.length === 1 ? "poză GPS" : "poze GPS"}</span>
+                <div><h3>Fotografii constatare</h3><p>{damageType === "FO cut" ? "Pentru FO cut sunt obligatorii minimum 3 imagini clare." : "Imagini clare din care reiese natura avariei."}</p></div>
+                <span>{validPhotos.length}/{requiredAssessmentPhotos} poze GPS</span>
               </div>
 
               <label className={`intervention-photo-upload${uploading ? " is-uploading" : ""}`}>
@@ -626,7 +633,7 @@ export function InterventionOperationsSection({
               <div className={damageType ? "done" : ""}><span>{damageType ? "✓" : "○"}</span><p><strong>Tipul avariei</strong><small>{damageType || "În așteptare"}</small></p></div>
               {orangeIntervention && <div className={cause ? "done" : ""}><span>{cause ? "✓" : "○"}</span><p><strong>Cauza avariei</strong><small>{cause || "Selectează cauza"}</small></p></div>}
               {orangeIntervention && <div className={damageLocation ? "done" : ""}><span>{damageLocation ? "✓" : "○"}</span><p><strong>Locația avariei</strong><small>{damageLocation ? `${damageLocation.lat.toFixed(6)}, ${damageLocation.lon.toFixed(6)}` : "Amplasează punctul pe hartă"}</small></p></div>}
-              <div className={validPhotos.length ? "done" : ""}><span>{validPhotos.length ? "✓" : "○"}</span><p><strong>Fotografii geotagate</strong><small>{validPhotos.length ? `${validPhotos.length} ${validPhotos.length === 1 ? "fotografie cu GPS valid" : "fotografii cu GPS valid"}` : "Minimum o fotografie obligatorie"}</small></p></div>
+              <div className={assessmentPhotosReady ? "done" : ""}><span>{assessmentPhotosReady ? "✓" : "○"}</span><p><strong>Fotografii geotagate</strong><small>{assessmentPhotosReady ? `${validPhotos.length} fotografii cu GPS valid` : `Minimum ${requiredAssessmentPhotos} ${requiredAssessmentPhotos === 1 ? "fotografie obligatorie" : "fotografii obligatorii"}`}</small></p></div>
             </div>
             <div className="geo-notice"><span>⌖</span><p><strong>GPS, dată și oră obligatorii</strong>Fotografiile sunt marcate direct cu poziția, data și ora constatării.</p></div>
             {initialSummary?.assessment?.documentedAt && <p className="intervention-saved-note">Salvată: {formatCapturedAt(initialSummary.assessment.documentedAt)}</p>}
@@ -666,7 +673,11 @@ export function InterventionOperationsSection({
 
               <label className="intervention-damage-field"><span>Descriere incident validată</span><textarea rows={5} maxLength={2000} value={reviewIncident} onChange={(event) => setReviewIncident(event.target.value)} /></label>
               <label className="intervention-damage-field"><span>Descriere remediere validată</span><textarea rows={5} maxLength={2000} value={reviewRemediation} onChange={(event) => setReviewRemediation(event.target.value)} /></label>
-              <label className="intervention-damage-field"><span>Ora de închidere *</span><input type="time" required value={closingTime} readOnly={project.status === "Finalizat"} onChange={(event) => setClosingTime(event.target.value)} /><small>Ora este introdusă manual de coordonator și se transmite în QAF și Centralizator.</small></label>
+              <div className="intervention-material-source-lists">
+                <label className="intervention-damage-field"><span>Data închiderii *</span><input type="date" required value={closingDate} readOnly={project.status === "Finalizat"} onChange={(event) => setClosingDate(event.target.value)} /></label>
+                <label className="intervention-damage-field"><span>Ora de închidere *</span><input type="time" required value={closingTime} readOnly={project.status === "Finalizat"} onChange={(event) => setClosingTime(event.target.value)} /></label>
+              </div>
+              <small>Data și ora sunt introduse manual de coordonator și se transmit în QAF și Centralizator.</small>
 
               <div className="card-heading"><div><h2>Materiale validate</h2><p>Coordonatorul poate corecta lista înainte de generarea QAF.</p></div></div>
               <label className="intervention-damage-field">
@@ -719,7 +730,7 @@ export function InterventionOperationsSection({
               <div className={initialSummary?.assessment ? "done" : ""}><span>{initialSummary?.assessment ? "✓" : "○"}</span><p><strong>Constatare completată</strong><small>{initialSummary?.assessment?.damageType ?? "Tipul avariei și fotografiile lipsesc"}</small></p></div>
               <div className={executionActivities.length ? "done" : ""}><span>{executionActivities.length ? "✓" : "○"}</span><p><strong>Execuție documentată</strong><small>{executionActivities.length ? `${executionActivities.length} ${executionActivities.length === 1 ? "activitate salvată" : "activități salvate"}` : "Minimum o activitate obligatorie"}</small></p></div>
               <div className={reportReady ? "done" : ""}><span>{reportReady ? "✓" : "○"}</span><p><strong>Raport pregătit</strong><small>{reportReady ? "Raportul intervenției este complet" : "Raportul trebuie să aibă cel puțin 20 de caractere"}</small></p></div>
-              <div className={closingTimeReady ? "done" : ""}><span>{closingTimeReady ? "✓" : "○"}</span><p><strong>Ora de închidere</strong><small>{closingTimeReady ? closingTime : "Ora este obligatorie"}</small></p></div>
+              <div className={closingDateReady && closingTimeReady ? "done" : ""}><span>{closingDateReady && closingTimeReady ? "✓" : "○"}</span><p><strong>Data și ora închiderii</strong><small>{closingDateReady && closingTimeReady ? `${closingDate} · ${closingTime}` : "Data și ora sunt obligatorii"}</small></p></div>
             </div>
 
             {initialSummary?.documentation && <p className="intervention-saved-note">Validată de {initialSummary.documentation.validatedBy} · {formatCapturedAt(initialSummary.documentation.validatedAt)}</p>}
