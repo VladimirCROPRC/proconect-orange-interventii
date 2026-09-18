@@ -236,7 +236,7 @@ export async function syncOrangeTicketWorkbook(projectId: string) {
   if (!itemId || !driveId) throw new RemoteFailure("Excel Online: registrul partajat nu a putut fi identificat.");
 
   const workbook = `/drives/${encodeURIComponent(driveId)}/items/${encodeURIComponent(itemId)}/workbook`;
-  const ticketColumn = await graph(token, `${workbook}/tables/Table1/columns/3/dataBodyRange?$select=values`);
+  const ticketColumn = await graph(token, `${workbook}/tables/Table1/columns/${encodeURIComponent("Ticket ID")}/dataBodyRange?$select=values`);
   if (ticketColumn.ok) {
     const range = await ticketColumn.json() as WorkbookRange;
     const alreadyExists = (range.values ?? []).some((row) => String(row[0] ?? "").trim().toUpperCase() === project.id.toUpperCase());
