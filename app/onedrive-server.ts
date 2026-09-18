@@ -339,6 +339,10 @@ function readableFolderName(value: string) {
   return value.normalize("NFC").replace(/[\u0000-\u001f"*:<>?\/\\|#%]/g, "_").replace(/^[. ]+|[. ]+$/g, "").slice(0, 140) || "Lucrare";
 }
 
+function validOrangeTicketId(value: string) {
+  return /^(IMO|FITT|PBM)\d+$/i.test(value.trim());
+}
+
 const romanianMonths = ["Ianuarie", "Februarie", "Martie", "Aprilie", "Mai", "Iunie", "Iulie", "August", "Septembrie", "Octombrie", "Noiembrie", "Decembrie"];
 
 function shortOrangeTicket(projectId: string) {
@@ -457,6 +461,8 @@ async function uploadJob(c: Connection, job: Job) {
     if (!project) return;
     const activity: OneDriveActivity = project.activity_type && project.activity_type in oneDriveActivityFolders ? project.activity_type : "Instalare";
     if (activity === "Intervenție Orange") {
+      // Ignore legacy/demo rows that predate the Orange-only ticket guard.
+      if (!validOrangeTicketId(job.item_id)) return;
       const projectFolder = await orangeProjectDestination(token, c.root_id, job.item_id);
       const qaf = await buildOrangeQafXlsx(job.item_id);
       const shortTicket = shortOrangeTicket(job.item_id);
@@ -466,12 +472,18 @@ async function uploadJob(c: Connection, job: Job) {
         headers: { "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" },
         body: qaf,
       }));
-      const kmz = await buildOrangeKmz(job.item_id);
-      await checked(await graph(token, `/me/drive/items/${encodeURIComponent(projectFolder.id)}:/${encodeURIComponent(`${readableFolderName(shortTicket)}.kmz`)}:/content`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/vnd.google-earth.kmz" },
-        body: kmz,
-      }));
+      try {
+        const kmz = await buildOrangeKmz(job.item_id);
+        await checked(await graph(token, `/me/drive/items/${encodeURIComponent(projectFolder.id)}:/${encodeURIComponent(`${readableFolderName(shortTicket)}.kmz`)}:/content`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/vnd.google-earth.kmz" },
+          body: kmz,
+        }));
+      } catch (error) {
+        // A newly generated ticket has no field documentation yet. Its KMZ is
+        // created automatically after the first mapped field action.
+        if (!(error instanceof Error) || !error.message.includes("Documentarea intervenției nu este disponibilă")) throw error;
+      }
       await folder(token, projectFolder.id, shortTicket);
       // Update the centralizer last. A workbook failure must not prevent the
       // QAF, KMZ and photo destination from reaching OneDrive.
@@ -499,6 +511,7 @@ async function uploadJob(c: Connection, job: Job) {
   const project = await getRawDb().prepare("SELECT activity_type FROM projects WHERE id = ?").bind(projectId).first<{ activity_type?: OneDriveActivity }>();
   if (!project) return;
   if (project.activity_type && project.activity_type in oneDriveActivityFolders) activity = project.activity_type;
+  if (activity === "Intervenție Orange" && !validOrangeTicketId(projectId)) return;
   const stored = await bucket().get(file.storage_key);
   if (!stored) throw new Error("Fișierul sursă nu mai este disponibil în Cloudflare.");
   const filename = await safeName(file.original_name, file.id);
