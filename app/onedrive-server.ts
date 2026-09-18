@@ -127,7 +127,8 @@ export async function finishOneDrive(sessionId: string, state: string, code: str
   if (existing?.drive_id && existing.drive_id !== drive.id) throw new Error("Este conectat alt OneDrive. Deconectează-l explicit înainte de schimbarea contului.");
   const root = await oneDriveStage("root", async () => checked(await graph(tokens.access_token!, "/me/drive/root")));
   const destination = await oneDriveStage("folder", async () => {
-    const orange = await folder(tokens.access_token!, root.id, "Orange");
+    const operationalRoot = await folder(tokens.access_token!, root.id, "OROC + ORO");
+    const orange = await folder(tokens.access_token!, operationalRoot.id, "Orange");
     return folder(tokens.access_token!, orange.id, "Rapoarte incidente Pro Conect");
   });
   const generation = crypto.randomUUID();
