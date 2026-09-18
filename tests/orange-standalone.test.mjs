@@ -66,6 +66,7 @@ test("Orange is the default and only activity in navigation", async () => {
 
 test("OneDrive uses the existing Orange reports hierarchy", async () => {
   const oneDrive = await source("app/onedrive-server.ts");
+  assert.match(oneDrive, /OROC \+ ORO/);
   assert.match(oneDrive, /Rapoarte incidente Pro Conect/);
   assert.match(oneDrive, /rapoarte de interventie/);
   assert.match(oneDrive, /romanianMonths/);
