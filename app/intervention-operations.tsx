@@ -227,7 +227,7 @@ export function InterventionOperationsSection({
       })
       .catch((failure) => { if (mounted) onNotify(failure instanceof Error ? failure.message : "Magaziile nu sunt disponibile."); });
     return () => { mounted = false; };
-  }, [canEdit, section, project.technician, initialSummary?.documentation?.warehouseId, onNotify]);
+  }, [canEdit, section, project.technician, initialSummary?.documentation?.warehouseId]);
 
   useEffect(() => {
     let mounted = true;
