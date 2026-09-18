@@ -176,6 +176,7 @@ export function InterventionOperationsSection({
   const [reviewServices, setReviewServices] = useState(initialSummary?.documentation?.services ?? []);
   const [serviceCode, setServiceCode] = useState("");
   const [serviceQuantity, setServiceQuantity] = useState("1");
+  const [closingTime, setClosingTime] = useState(initialSummary?.documentation?.closingTime ?? "");
 
   useEffect(() => {
     let mounted = true;
@@ -238,6 +239,7 @@ export function InterventionOperationsSection({
       if (mounted) setReviewMaterials(initialSummary?.execution?.materials ?? []);
       if (mounted) setSelectedWarehouseId(initialSummary?.documentation?.warehouseId ?? "");
       if (mounted) setReviewServices(initialSummary?.documentation?.services ?? []);
+      if (mounted) setClosingTime(initialSummary?.documentation?.closingTime ?? "");
     });
     return () => {
       mounted = false;
@@ -262,7 +264,8 @@ export function InterventionOperationsSection({
   const totalExecutionPhotos = executionActivities.reduce((total, activity) => total + activity.photoCount, 0);
   const totalCableMeters = executionActivities.reduce((total, activity) => total + (activity.type === "fo-installation" ? activity.cableLengthMeters ?? 0 : 0), 0);
   const reportReady = report.trim().length >= 20 && report.trim().length <= 5_000;
-  const canFinalize = Boolean(canEdit && initialSummary?.assessment && executionActivities.length && reportReady && project.status !== "Finalizat");
+  const closingTimeReady = /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(closingTime);
+  const canFinalize = Boolean(canEdit && initialSummary?.assessment && executionActivities.length && reportReady && closingTimeReady && project.status !== "Finalizat");
 
   async function addPhotos(selectedFiles: File[], category: "damage" | "site-measurement" = "damage") {
     if (!selectedFiles.length) return;
@@ -369,6 +372,7 @@ export function InterventionOperationsSection({
           report: report.trim(),
           incidentDescription: reviewIncident.trim(),
           remediationDescription: reviewRemediation.trim(),
+          closingTime,
           services: reviewServices,
           ...(selectedWarehouseId ? { warehouseId: selectedWarehouseId } : {}),
           validatedAt: 0,
@@ -662,6 +666,7 @@ export function InterventionOperationsSection({
 
               <label className="intervention-damage-field"><span>Descriere incident validată</span><textarea rows={5} maxLength={2000} value={reviewIncident} onChange={(event) => setReviewIncident(event.target.value)} /></label>
               <label className="intervention-damage-field"><span>Descriere remediere validată</span><textarea rows={5} maxLength={2000} value={reviewRemediation} onChange={(event) => setReviewRemediation(event.target.value)} /></label>
+              <label className="intervention-damage-field"><span>Ora de închidere *</span><input type="time" required value={closingTime} readOnly={project.status === "Finalizat"} onChange={(event) => setClosingTime(event.target.value)} /><small>Ora este introdusă manual de coordonator și se transmite în QAF și Centralizator.</small></label>
 
               <div className="card-heading"><div><h2>Materiale validate</h2><p>Coordonatorul poate corecta lista înainte de generarea QAF.</p></div></div>
               <label className="intervention-damage-field">
@@ -714,6 +719,7 @@ export function InterventionOperationsSection({
               <div className={initialSummary?.assessment ? "done" : ""}><span>{initialSummary?.assessment ? "✓" : "○"}</span><p><strong>Constatare completată</strong><small>{initialSummary?.assessment?.damageType ?? "Tipul avariei și fotografiile lipsesc"}</small></p></div>
               <div className={executionActivities.length ? "done" : ""}><span>{executionActivities.length ? "✓" : "○"}</span><p><strong>Execuție documentată</strong><small>{executionActivities.length ? `${executionActivities.length} ${executionActivities.length === 1 ? "activitate salvată" : "activități salvate"}` : "Minimum o activitate obligatorie"}</small></p></div>
               <div className={reportReady ? "done" : ""}><span>{reportReady ? "✓" : "○"}</span><p><strong>Raport pregătit</strong><small>{reportReady ? "Raportul intervenției este complet" : "Raportul trebuie să aibă cel puțin 20 de caractere"}</small></p></div>
+              <div className={closingTimeReady ? "done" : ""}><span>{closingTimeReady ? "✓" : "○"}</span><p><strong>Ora de închidere</strong><small>{closingTimeReady ? closingTime : "Ora este obligatorie"}</small></p></div>
             </div>
 
             {initialSummary?.documentation && <p className="intervention-saved-note">Validată de {initialSummary.documentation.validatedBy} · {formatCapturedAt(initialSummary.documentation.validatedAt)}</p>}
