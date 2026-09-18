@@ -94,3 +94,25 @@ test("QAF preserves the original workbook hyperlink formulas", async () => {
   assert.match(qaf, /writeText\(mainXml, "C34", latitude\)/);
   assert.match(qaf, /fullCalcOnLoad="1"/);
 });
+
+test("manual closing time feeds QAF and both centralizers", async () => {
+  const operations = await source("app/intervention-operations.tsx");
+  const qaf = await source("app/orange-qaf.ts");
+  const centralizer = await source("app/orange-centralizer.ts");
+  const oneDrive = await source("app/onedrive-server.ts");
+  assert.match(operations, /Ora de închidere/);
+  assert.match(operations, /closingTime/);
+  assert.match(qaf, /documentation\.closingTime/);
+  assert.match(centralizer, /closingTimestamp\(validated\?\.validatedAt, validated\?\.closingTime\)/);
+  assert.match(oneDrive, /orangeClosingTimestamp\(documentation\?\.validatedAt, documentation\?\.closingTime\)/);
+});
+
+test("Orange county is selected from the searchable approved list", async () => {
+  const page = await source("app/page.tsx");
+  const server = await source("app/project-server.ts");
+  const counties = await source("app/orange-counties.ts");
+  assert.match(page, /list="orange-counties"/);
+  assert.match(server, /orangeCountySet\.has\(countyCandidate\)/);
+  assert.match(counties, /Giurgiu County/);
+  assert.equal((counties.match(/Vâlcea County/g) ?? []).length, 1);
+});
