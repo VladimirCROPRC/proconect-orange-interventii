@@ -177,6 +177,7 @@ export type InterventionDocumentationSummary = {
   remediationDescription?: string;
   services?: InterventionServiceSelection[];
   warehouseId?: string;
+  closingTime?: string;
   validatedAt: number;
   validatedBy: string;
 };
