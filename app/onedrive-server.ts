@@ -5,6 +5,7 @@ import { buildAcceptanceReportDocx } from "./report-docx";
 import { buildSpliceSheetXlsx } from "./splice-xlsx";
 import { buildMaterialSheetPdf } from "./material-pdf";
 import { buildOrangeQafXlsx } from "./orange-qaf";
+import { buildOrangeKmz } from "./orange-kmz";
 import { base64url, decode64, fixedOrigin, retryDelay, safeName, usesOneDrive, validMode, type BackupMode } from "./onedrive-core";
 
 type Environment = { PROCONECT_APP_URL?: string; ONEDRIVE_CLIENT_ID?: string; ONEDRIVE_TENANT_ID?: string; ONEDRIVE_CLIENT_SECRET?: string; ONEDRIVE_ENCRYPTION_KEY?: string; ORANGE_TICKETS_WORKBOOK_URL?: string };
@@ -125,7 +126,10 @@ export async function finishOneDrive(sessionId: string, state: string, code: str
   const existing = await oneDriveStage("connection-db", () => connection());
   if (existing?.drive_id && existing.drive_id !== drive.id) throw new Error("Este conectat alt OneDrive. Deconectează-l explicit înainte de schimbarea contului.");
   const root = await oneDriveStage("root", async () => checked(await graph(tokens.access_token!, "/me/drive/root")));
-  const destination = await oneDriveStage("folder", () => folder(tokens.access_token!, root.id, "Proconect Orange Interventii"));
+  const destination = await oneDriveStage("folder", async () => {
+    const orange = await folder(tokens.access_token!, root.id, "Orange");
+    return folder(tokens.access_token!, orange.id, "Rapoarte incidente Pro Conect");
+  });
   const generation = crypto.randomUUID();
   await oneDriveStage("save-db", async () => {
     const accessToken = await seal(tokens.access_token!);
@@ -307,10 +311,33 @@ const oneDriveSectionFolders: Record<OneDriveActivity, Record<string, string>> =
 function readableFolderName(value: string) {
   return value.normalize("NFC").replace(/[\u0000-\u001f"*:<>?\/\\|#%]/g, "_").replace(/^[. ]+|[. ]+$/g, "").slice(0, 140) || "Lucrare";
 }
+
+const romanianMonths = ["Ianuarie", "Februarie", "Martie", "Aprilie", "Mai", "Iunie", "Iulie", "August", "Septembrie", "Octombrie", "Noiembrie", "Decembrie"];
+
+function shortOrangeTicket(projectId: string) {
+  const match = /^(IMO|FITT|PBM)0*(\d+)$/i.exec(projectId.trim());
+  return match ? `${match[1].toUpperCase()}${match[2]}` : projectId.trim();
+}
+
+async function orangeProjectDestination(token: string, rootId: string, projectId: string) {
+  const project = await getRawDb().prepare("SELECT departure_locality, county, created_at FROM projects WHERE id = ? LIMIT 1")
+    .bind(projectId).first<{ departure_locality?: string; county?: string; created_at?: number }>();
+  if (!project) throw new Error("Tichetul Orange nu mai există.");
+  const date = new Date(project.created_at ?? Date.now());
+  const year = Number(new Intl.DateTimeFormat("en", { timeZone: "Europe/Bucharest", year: "numeric" }).format(date));
+  const month = Number(new Intl.DateTimeFormat("en", { timeZone: "Europe/Bucharest", month: "2-digit" }).format(date));
+  const day = new Intl.DateTimeFormat("en", { timeZone: "Europe/Bucharest", day: "2-digit" }).format(date);
+  const yearFolder = await folder(token, rootId, `ENO3 Y${Math.max(1, year - 2022)} - ${year}- rapoarte de interventie`);
+  const monthFolder = await folder(token, yearFolder.id, `${String(month).padStart(2, "0")} ${romanianMonths[month - 1]} ${year}`);
+  const location = [project.departure_locality, project.county].filter(Boolean).map((value) => readableFolderName(String(value)).replace(/\s+/g, "")).join("_");
+  const ticketFolderName = `${day}.${String(month).padStart(2, "0")}.${year}_${projectId}${location ? `_${location}` : ""}`;
+  return folder(token, monthFolder.id, readableFolderName(ticketFolderName));
+}
+
 async function oneDriveDestination(token: string, rootId: string, projectId: string, activity: OneDriveActivity, section: string) {
+  if (activity === "Intervenție Orange") return orangeProjectDestination(token, rootId, projectId);
   const activityFolder = await folder(token, rootId, oneDriveActivityFolders[activity]);
   const projectFolder = await folder(token, activityFolder.id, readableFolderName(projectId));
-  if (activity === "Intervenție Orange") return projectFolder;
   const sectionName = oneDriveSectionFolders[activity][section] ?? "99_Alte documente";
   return folder(token, projectFolder.id, sectionName);
 }
@@ -323,8 +350,11 @@ function splicePhotoFolder(category: string) {
   return undocumented ? `J nedocumentată ${undocumented[1]}` : token;
 }
 
-async function oneDriveFileDestination(token: string, rootId: string, projectId: string, activity: OneDriveActivity, section: string, category: string) {
+async function oneDriveFileDestination(token: string, rootId: string, projectId: string, activity: OneDriveActivity, section: string, category: string, filename: string) {
   const destination = await oneDriveDestination(token, rootId, projectId, activity, section);
+  if (activity === "Intervenție Orange") {
+    return /\.kmz$/i.test(filename) ? destination : folder(token, destination.id, shortOrangeTicket(projectId));
+  }
   const spliceFolder = section === "splices" ? splicePhotoFolder(category) : "";
   return spliceFolder ? folder(token, destination.id, spliceFolder) : destination;
 }
@@ -399,19 +429,28 @@ async function uploadJob(c: Connection, job: Job) {
     const project = await getRawDb().prepare("SELECT activity_type FROM projects WHERE id = ?").bind(job.item_id).first<{ activity_type?: OneDriveActivity }>();
     if (!project) return;
     const activity: OneDriveActivity = project.activity_type && project.activity_type in oneDriveActivityFolders ? project.activity_type : "Instalare";
-    const activityFolder = await folder(token, c.root_id, oneDriveActivityFolders[activity]);
-    const projectFolder = await folder(token, activityFolder.id, readableFolderName(job.item_id));
     if (activity === "Intervenție Orange") {
+      const projectFolder = await orangeProjectDestination(token, c.root_id, job.item_id);
       await syncOrangeTicketWorkbook(job.item_id);
       const qaf = await buildOrangeQafXlsx(job.item_id);
-      const filename = `${readableFolderName(job.item_id)}.xlsx`;
+      const shortTicket = shortOrangeTicket(job.item_id);
+      const filename = `${readableFolderName(shortTicket)}.xlsx`;
       await checked(await graph(token, `/me/drive/items/${encodeURIComponent(projectFolder.id)}:/${encodeURIComponent(filename)}:/content`, {
         method: "PUT",
         headers: { "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" },
         body: qaf,
       }));
+      const kmz = await buildOrangeKmz(job.item_id);
+      await checked(await graph(token, `/me/drive/items/${encodeURIComponent(projectFolder.id)}:/${encodeURIComponent(`${readableFolderName(shortTicket)}.kmz`)}:/content`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/vnd.google-earth.kmz" },
+        body: kmz,
+      }));
+      await folder(token, projectFolder.id, shortTicket);
       return;
     }
+    const activityFolder = await folder(token, c.root_id, oneDriveActivityFolders[activity]);
+    const projectFolder = await folder(token, activityFolder.id, readableFolderName(job.item_id));
     const sections = await Promise.all(Object.entries(oneDriveSectionFolders[activity]).map(async ([section, name]) => ({
       section,
       item: await folder(token, projectFolder.id, name),
@@ -435,7 +474,7 @@ async function uploadJob(c: Connection, job: Job) {
   if (!stored) throw new Error("Fișierul sursă nu mai este disponibil în Cloudflare.");
   const filename = await safeName(file.original_name, file.id);
   const body = await new Response(stored.body).arrayBuffer();
-  const destination = await oneDriveFileDestination(token, c.root_id, projectId, activity, file.section, file.category);
+  const destination = await oneDriveFileDestination(token, c.root_id, projectId, activity, file.section, file.category, filename);
   // Recheck before external write; switching/disconnecting does not resurrect old credentials.
   const current = await connection();
   if (!current || current.generation !== c.generation || current.lease !== c.lease || !usesOneDrive(current.mode)) throw new Error("Sincronizarea OneDrive a fost oprită.");
@@ -451,8 +490,8 @@ export async function deleteOneDriveFileCopy(fileId: string) {
   if (!project) return;
   const activity: OneDriveActivity = project.activity_type && project.activity_type in oneDriveActivityFolders ? project.activity_type : "Instalare";
   const token = await tokenFor(c);
-  const destination = await oneDriveFileDestination(token, c.root_id, file.project_id, activity, file.section, file.category);
   const filename = await safeName(file.original_name, file.id);
+  const destination = await oneDriveFileDestination(token, c.root_id, file.project_id, activity, file.section, file.category, filename);
   const response = await graph(token, `/me/drive/items/${encodeURIComponent(destination.id)}:/${encodeURIComponent(filename)}`, { method: "DELETE" });
   if (!response.ok && response.status !== 404) throw new Error(`OneDrive nu a putut șterge copia fișierului (${response.status}).`);
   await getRawDb().prepare("DELETE FROM onedrive_jobs WHERE id = ?").bind(`file:${fileId}`).run();
