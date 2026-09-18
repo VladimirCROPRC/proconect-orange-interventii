@@ -669,7 +669,7 @@ export default function Home() {
       mcType: (form.get("mc") === "on" ? String(form.get("mcType") || "") : "") as Project["mcType"],
       terminalBox: form.get("terminalBox") === "on",
       status: "Planificat",
-      date: "Astăzi",
+      date: isOrangeForm ? String(form.get("requestDate") || "").trim() : "Astăzi",
       ipwo: ipwoName || "Fișier neîncărcat",
       splice: spliceName || "Fișier neîncărcat",
     };
@@ -690,11 +690,12 @@ export default function Home() {
       const payload = (await response.json()) as { project?: Project; warnings?: string[]; error?: string };
       if (!response.ok || !payload.project) throw new Error(payload.error || "Proiectul nu a putut fi creat.");
 
+      const savedId = payload.project.id;
       const uploadResults = await Promise.allSettled([
-        ...(ipwoFile ? [uploadProjectFile({ projectId: id, section: "project", category: "ipwo", file: ipwoFile })] : []),
-        ...(spliceFile ? [uploadProjectFile({ projectId: id, section: "project", category: "splice-diagram", file: spliceFile })] : []),
-        ...(orangeNetworkFile ? [uploadProjectFile({ projectId: id, section: "project", category: "orangeNetwork", file: orangeNetworkFile })] : []),
-        ...(mapXtremeFile ? [uploadProjectFile({ projectId: id, section: "project", category: "mapxtreme", file: mapXtremeFile })] : []),
+        ...(ipwoFile ? [uploadProjectFile({ projectId: savedId, section: "project", category: "ipwo", file: ipwoFile })] : []),
+        ...(spliceFile ? [uploadProjectFile({ projectId: savedId, section: "project", category: "splice-diagram", file: spliceFile })] : []),
+        ...(orangeNetworkFile ? [uploadProjectFile({ projectId: savedId, section: "project", category: "orangeNetwork", file: orangeNetworkFile })] : []),
+        ...(mapXtremeFile ? [uploadProjectFile({ projectId: savedId, section: "project", category: "mapxtreme", file: mapXtremeFile })] : []),
       ]);
       setProjects((current) => [payload.project!, ...current]);
       setSafetyChecks((current) => ({ ...current, [payload.project!.id]: { pretask: false, ppe: false, completed: false } }));
@@ -703,7 +704,7 @@ export default function Home() {
       closeModal();
       const failedUploads = uploadResults.filter((result) => result.status === "rejected").length;
       const warning = payload.warnings?.[0];
-      showToast(warning ?? (failedUploads ? `${id} a fost salvat, dar ${failedUploads} fișier nu a putut fi încărcat.` : `${id} a fost salvat permanent și alocat tehnicianului.`));
+      showToast(warning ?? (failedUploads ? `${savedId} a fost salvat, dar ${failedUploads} fișier nu a putut fi încărcat.` : `${savedId} a fost salvat permanent.`));
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Proiectul nu a putut fi creat.");
     } finally {
@@ -1641,29 +1642,30 @@ export default function Home() {
                 ) : (
                   <label><span>Request ID *</span><div className="prefix-input"><b>RID</b><input name="requestId" required readOnly={Boolean(editingProject)} defaultValue={editingProject?.id.replace(/^RID/i, "")} inputMode="numeric" /></div></label>
                 )}
-                <label><span>{isOrangeForm ? "Cod site A *" : "Nume client *"}</span><input name="client" required defaultValue={editingProject?.client} /></label>
+                <label><span>{isOrangeForm ? "Cod site A" : "Nume client *"}</span><input name="client" required={!isOrangeForm} defaultValue={editingProject?.client} /></label>
                 {!editingProject && !isOrangeForm && <>
                   <label><span>Cod site (opțional)</span><input name="siteCode" maxLength={100} /></label>
                   <label><span>Client LEC (opțional)</span><input name="lec" maxLength={100} /></label>
                 </>}
                 <label className="wide"><span>{isOrangeForm ? "Cod site B (opțional)" : isInstallationForm ? "Adresă instalare *" : "Adresă lucrare *"}</span><input name="address" required={!isOrangeForm} defaultValue={editingProject?.address} /></label>
                 {isOrangeForm && <>
-                  <label className="wide"><span>Denumirea tronsonului FO *</span><input name="foSectionName" required maxLength={200} defaultValue={editingProject?.foSectionName ?? ""} /></label>
-                  <label><span>Topologie tronson *</span><select name="topology" required defaultValue={editingProject?.topology ?? ""}><option value="" disabled>Selectează topologia</option><option>FO BB</option><option>FO Local</option><option>VHBB</option></select></label>
-                  <label><span>Tip intervenție *</span><select name="orangeInterventionType" required value={orangeInterventionType ?? ""} onChange={(event) => { setOrangeInterventionType(event.target.value as Project["orangeInterventionType"]); setOrangeSla(""); }}><option value="" disabled>Selectează tipul</option><option>FITT</option><option>IMO</option><option>PBM</option></select></label>
-                  <label><span>SLA *</span><select name="sla" required value={orangeSla} disabled={!orangeInterventionType} onChange={(event) => setOrangeSla(event.target.value)}><option value="" disabled>{orangeInterventionType ? "Selectează SLA" : "Selectează mai întâi tipul"}</option>{orangeInterventionType && orangeSlaOptions[orangeInterventionType]?.map((option) => <option key={option}>{option}</option>)}</select></label>
-                  <label className="wide"><span>Localitate plecare echipă *</span><input name="departureLocality" required maxLength={150} defaultValue={editingProject?.departureLocality ?? ""} /></label>
-                  <label><span>Județ *</span><input name="county" list="orange-counties" required maxLength={100} autoComplete="off" defaultValue={editingProject?.county ?? ""} /><datalist id="orange-counties">{orangeCounties.map((county) => <option key={county} value={county} />)}</datalist><small>Scrie pentru a căuta în lista județelor disponibile.</small></label>
+                  {!editingProject && <label><span>Data solicitării intervenției</span><input type="date" name="requestDate" /></label>}
+                  <label className="wide"><span>Denumirea tronsonului FO</span><input name="foSectionName" maxLength={200} defaultValue={editingProject?.foSectionName ?? ""} /></label>
+                  <label><span>Topologie tronson</span><select name="topology" defaultValue={editingProject?.topology ?? ""}><option value="">Selectează topologia</option><option>FO BB</option><option>FO Local</option><option>VHBB</option></select></label>
+                  <label><span>Tip intervenție</span><select name="orangeInterventionType" value={orangeInterventionType ?? ""} onChange={(event) => { setOrangeInterventionType(event.target.value as Project["orangeInterventionType"]); setOrangeSla(""); }}><option value="">Selectează tipul</option><option>FITT</option><option>IMO</option><option>PBM</option></select></label>
+                  <label><span>SLA</span><select name="sla" value={orangeSla} disabled={!orangeInterventionType} onChange={(event) => setOrangeSla(event.target.value)}><option value="">{orangeInterventionType ? "Selectează SLA" : "Selectează mai întâi tipul"}</option>{orangeInterventionType && orangeSlaOptions[orangeInterventionType]?.map((option) => <option key={option}>{option}</option>)}</select></label>
+                  <label className="wide"><span>Localitate plecare echipă</span><input name="departureLocality" maxLength={150} defaultValue={editingProject?.departureLocality ?? ""} /></label>
+                  <label><span>Județ</span><input name="county" list="orange-counties" maxLength={100} autoComplete="off" defaultValue={editingProject?.county ?? ""} /><datalist id="orange-counties">{orangeCounties.map((county) => <option key={county} value={county} />)}</datalist><small>Scrie pentru a căuta în lista județelor disponibile.</small></label>
                 </>}
                 {!isOrangeForm && <><label><span>Persoană de contact *</span><input name="contact" required defaultValue={editingProject?.contact} /></label>
                 <label><span>Telefon *</span><input name="phone" required defaultValue={editingProject?.phone} /></label>
                 <label className="wide"><span>E-mail</span><input name="email" type="email" defaultValue={editingProject?.email} /></label></>}
-                <label className="wide work-requirements"><span>{isOrangeForm ? "Descriere" : formActivityType === "Intervenție" ? "Cerințele intervenției" : formActivityType === "Survey" ? "Obiectivele survey-ului" : "Cerințele lucrării"} *</span><textarea name="requirements" required defaultValue={editingProject?.requirements} rows={5} /></label>
+                <label className="wide work-requirements"><span>{isOrangeForm ? "Descriere" : formActivityType === "Intervenție" ? "Cerințele intervenției *" : formActivityType === "Survey" ? "Obiectivele survey-ului *" : "Cerințele lucrării *"}</span><textarea name="requirements" required={!isOrangeForm} defaultValue={editingProject?.requirements} rows={5} /></label>
               </div></div>
               <div className="form-section"><h3><span>2</span> {isInstallationForm ? "Alocare și echipamente" : "Alocare tehnician"}</h3><div className="form-grid">
                 {currentAccount.role === "Tehnician" && formActivityType === "Intervenție Orange" && !editingProject
                   ? <label><span>Tehnician alocat</span><input name="technician" readOnly value={currentAccount.name} /><small>Tichetul va fi alocat automat contului tău.</small></label>
-                  : <label><span>Tehnician alocat *</span><select name="technician" required defaultValue={editingProject?.technician || ""}><option value="" disabled>Selectează tehnicianul</option>{technicians.map((tech) => <option key={tech.username}>{tech.name}</option>)}</select></label>}
+                  : <label><span>Tehnician alocat{isOrangeForm ? "" : " *"}</span><select name="technician" required={!isOrangeForm} defaultValue={editingProject?.technician || ""}><option value="">Selectează tehnicianul</option>{technicians.map((tech) => <option key={tech.username}>{tech.name}</option>)}</select></label>}
                 {isInstallationForm && <label><span>Tip CPE *</span><select name="cpe" required defaultValue={editingProject?.cpe || ""}><option value="" disabled>{cpeList.length ? "Selectează echipamentul" : "Catalogul CPE este gol"}</option>{editingProject?.cpe && !cpeList.some((cpe) => cpe.name === editingProject.cpe) && <option value={editingProject.cpe}>{editingProject.cpe} (echipament istoric)</option>}{cpeList.map((cpe) => <option key={cpe.name} value={cpe.name}>{cpe.name}{cpe.requiresGrounding ? " · necesită împământare" : ""}</option>)}</select><small>Adaugă și configurează echipamentele din secțiunea CPE.</small></label>}
                 {editingProject && <><label><span>Status proiect *</span><select name="status" required defaultValue={editingProject.status}><option>Planificat</option><option>În desfășurare</option><option>De verificat</option><option>Finalizat</option></select></label><label><span>Programare *</span><input name="date" required defaultValue={editingProject.date} /></label></>}
                 {isInstallationForm && <div className="wide"><span className="field-label">Echipamente suplimentare</span><div className="switch-row">
