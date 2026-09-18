@@ -134,19 +134,20 @@ test("Orange county is selected from the searchable approved list", async () => 
   assert.equal((counties.match(/Vâlcea County/g) ?? []).length, 1);
 });
 
-test("Orange ticket creation only requires the ticket number and uses the manual request date", async () => {
+test("Orange ticket creation only requires the ticket number and uses the manual request date and time", async () => {
   const page = await source("app/page.tsx");
   const server = await source("app/project-server.ts");
   const qaf = await source("app/orange-qaf.ts");
   const centralizer = await source("app/orange-centralizer.ts");
   const oneDrive = await source("app/onedrive-server.ts");
   assert.match(page, /Număr tichet \*<\/span><input name="requestId" required/);
-  assert.match(page, /Data solicitării intervenției<\/span><input type="date" name="requestDate"/);
+  assert.match(page, /Data și ora solicitării intervenției<\/span><input type="datetime-local" name="requestDate"/);
   assert.match(page, /date: isOrangeForm \? String\(form\.get\("requestDate"\)/);
   assert.match(page, /required=\{!isOrangeForm\}/);
   assert.doesNotMatch(server, /Completează toate informațiile obligatorii ale proiectului/);
-  assert.match(server, /normalizeRequestDate\(input\.date\)/);
+  assert.match(server, /normalizeRequestDateTime\(input\.date\)/);
   assert.match(qaf, /\[18, requested\]/);
+  assert.match(qaf, /time: match\[4\] && match\[5\] \? `\$\{match\[4\]\}:\$\{match\[5\]\}` : ""/);
   assert.match(centralizer, /requestDateTimestamp\(project\.scheduled_label/);
   assert.match(oneDrive, /orangeRequestTimestamp\(project\.scheduled_label/);
 });

@@ -103,9 +103,9 @@ function validWorkIdentifier(value: string, activityType: ProjectActivityType) {
     : /^RID\d{1,24}$/i.test(value);
 }
 
-function normalizeRequestDate(value: unknown) {
+function normalizeRequestDateTime(value: unknown) {
   if (typeof value !== "string" || !value.trim()) return "";
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
+  const match = /^(\d{4})-(\d{2})-(\d{2})(?:T([01]\d|2[0-3]):([0-5]\d))?$/.exec(value.trim());
   if (!match) return "";
   const year = Number(match[1]);
   const month = Number(match[2]);
@@ -327,8 +327,8 @@ export async function createProject(input: ProjectRecord, createdBy: Authenticat
   }
   const orangeDetails = normalizeOrangeDetails(input, activityType);
   if (input.county?.trim() && !orangeDetails.county) return { error: "Selectează județul din lista disponibilă.", status: 400 as const };
-  const requestDate = normalizeRequestDate(input.date);
-  if (input.date?.trim() && !requestDate) return { error: "Data solicitării intervenției nu este validă.", status: 400 as const };
+  const requestDate = normalizeRequestDateTime(input.date);
+  if (input.date?.trim() && !requestDate) return { error: "Data și ora solicitării intervenției nu sunt valide.", status: 400 as const };
   const existing = await getRawDb().prepare("SELECT id FROM projects WHERE id = ? LIMIT 1").bind(workId).first();
   if (existing) return { error: activityType === "Intervenție" || activityType === "Intervenție Orange" ? "Numărul tichetului există deja. Verifică valoarea introdusă." : "Request ID există deja. Verifică numărul introdus.", status: 409 as const };
 
@@ -384,8 +384,8 @@ export async function updateProject(input: ProjectRecord) {
   }
   const orangeDetails = normalizeOrangeDetails(input, activityType);
   if (input.county?.trim() && !orangeDetails.county) return { error: "Selectează județul din lista disponibilă.", status: 400 as const };
-  const requestDate = normalizeRequestDate(input.date);
-  if (input.date?.trim() && !requestDate) return { error: "Data solicitării intervenției nu este validă.", status: 400 as const };
+  const requestDate = normalizeRequestDateTime(input.date);
+  if (input.date?.trim() && !requestDate) return { error: "Data și ora solicitării intervenției nu sunt valide.", status: 400 as const };
   if (!["Planificat", "În desfășurare", "De verificat", "Finalizat"].includes(input.status)) {
     return { error: "Statusul proiectului nu este valid.", status: 400 as const };
   }

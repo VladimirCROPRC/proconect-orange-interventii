@@ -235,14 +235,14 @@ function manualClosingPlacement(date: string, time: string, fallback: ReturnType
 }
 
 function manualDatePlacement(date: string) {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  const match = /^(\d{4})-(\d{2})-(\d{2})(?:T([01]\d|2[0-3]):([0-5]\d))?$/.exec(date);
   if (!match) return null;
   const year = Number(match[1]);
   const month = Number(match[2]);
   const day = Number(match[3]);
   const parsed = new Date(Date.UTC(year, month - 1, day));
   return parsed.getUTCFullYear() === year && parsed.getUTCMonth() === month - 1 && parsed.getUTCDate() === day
-    ? { day, month, year, time: "" }
+    ? { day, month, year, time: match[4] && match[5] ? `${match[4]}:${match[5]}` : "" }
     : null;
 }
 

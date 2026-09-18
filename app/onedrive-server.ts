@@ -210,8 +210,9 @@ function bucharestTimestamp(value: number) {
 
 function orangeRequestTimestamp(value: string | undefined, fallback: number) {
   if (typeof value === "string" && !value.trim()) return "";
-  return value && /^\d{4}-\d{2}-\d{2}$/.test(value)
-    ? `${value.slice(8, 10)}.${value.slice(5, 7)}.${value.slice(0, 4)}`
+  const match = value ? /^(\d{4})-(\d{2})-(\d{2})(?:T([01]\d|2[0-3]):([0-5]\d))?$/.exec(value) : null;
+  return match
+    ? `${match[3]}.${match[2]}.${match[1]}${match[4] && match[5] ? ` ${match[4]}:${match[5]}:00` : ""}`
     : bucharestTimestamp(fallback);
 }
 
@@ -379,8 +380,8 @@ async function orangeProjectDestination(token: string, rootId: string, projectId
   const project = await getRawDb().prepare("SELECT departure_locality, county, scheduled_label, created_at FROM projects WHERE id = ? LIMIT 1")
     .bind(projectId).first<{ departure_locality?: string; county?: string; scheduled_label?: string; created_at?: number }>();
   if (!project) throw new Error("Tichetul Orange nu mai există.");
-  const date = project.scheduled_label && /^\d{4}-\d{2}-\d{2}$/.test(project.scheduled_label)
-    ? new Date(`${project.scheduled_label}T12:00:00Z`)
+  const date = project.scheduled_label && /^\d{4}-\d{2}-\d{2}(?:T(?:[01]\d|2[0-3]):[0-5]\d)?$/.test(project.scheduled_label)
+    ? new Date(`${project.scheduled_label.slice(0, 10)}T12:00:00Z`)
     : new Date(project.created_at ?? Date.now());
   const year = Number(new Intl.DateTimeFormat("en", { timeZone: "Europe/Bucharest", year: "numeric" }).format(date));
   const month = Number(new Intl.DateTimeFormat("en", { timeZone: "Europe/Bucharest", month: "2-digit" }).format(date));

@@ -122,7 +122,8 @@ function bucharestTimestamp(value: unknown) {
 
 function requestDateTimestamp(value: unknown, fallback: unknown) {
   if (typeof value === "string" && !value.trim()) return "";
-  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) return `${value.slice(8, 10)}.${value.slice(5, 7)}.${value.slice(0, 4)}`;
+  const match = typeof value === "string" ? /^(\d{4})-(\d{2})-(\d{2})(?:T([01]\d|2[0-3]):([0-5]\d))?$/.exec(value) : null;
+  if (match) return `${match[3]}.${match[2]}.${match[1]}${match[4] && match[5] ? `, ${match[4]}:${match[5]}` : ""}`;
   return bucharestTimestamp(fallback);
 }
 
