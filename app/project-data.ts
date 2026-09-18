@@ -30,6 +30,7 @@ export type ProjectRecord = {
   email: string;
   requirements: string;
   technician: string;
+  technicians?: string[];
   cpe: string;
   cpeRequiresGrounding: boolean;
   sfp: boolean;

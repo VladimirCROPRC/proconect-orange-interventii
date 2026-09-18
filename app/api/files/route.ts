@@ -46,6 +46,9 @@ export async function POST(request: Request) {
     const project = await getAuthorizedProject(projectId, session.account);
     if (!project) return Response.json({ error: "Proiect indisponibil." }, { status: 404 });
     if (section === "safety") {
+      if (project.activity_type === "Intervenție Orange") {
+        return Response.json({ error: "Tichetele Orange nu utilizează fotografii Pretask/EIP." }, { status: 400 });
+      }
       if (session.account.role !== "Tehnician") {
         return Response.json({ error: "Verificarea Pretask se completează de tehnicianul alocat lucrării." }, { status: 403 });
       }

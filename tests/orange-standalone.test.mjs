@@ -150,3 +150,32 @@ test("Orange ticket creation only requires the ticket number and uses the manual
   assert.match(centralizer, /requestDateTimestamp\(project\.scheduled_label/);
   assert.match(oneDrive, /orangeRequestTimestamp\(project\.scheduled_label/);
 });
+
+test("Orange tickets support multiple assigned and completing technicians", async () => {
+  const page = await source("app/page.tsx");
+  const server = await source("app/project-server.ts");
+  const operations = await source("app/intervention-operations.tsx");
+  const centralizer = await source("app/orange-centralizer.ts");
+  const oneDrive = await source("app/onedrive-server.ts");
+  assert.match(page, /name="technicians"/);
+  assert.match(page, /project\.technicians \?\? \[project\.technician\]/);
+  assert.match(server, /encodedTechnicianUsernames/);
+  assert.match(server, /instr\(technician_username, \?\) > 0/);
+  assert.match(operations, /completedByTechnicians/);
+  assert.match(operations, /Fără selecție, Centralizatorul va folosi echipa alocată inițial/);
+  assert.match(centralizer, /validated\?\.completedByTechnicians/);
+  assert.match(centralizer, /\n\s*completedBy,/);
+  assert.match(oneDrive, /values\[13\] = completedBy/);
+});
+
+test("Orange technicians are not asked for Pretask or EIP", async () => {
+  const page = await source("app/page.tsx");
+  const server = await source("app/project-server.ts");
+  const filesRoute = await source("app/api/files/route.ts");
+  assert.match(page, /selected\?\.activityType === "Intervenție Orange"/);
+  assert.match(page, /nextProject\.activityType !== "Intervenție Orange"/);
+  assert.match(page, /project\.activityType !== "Intervenție Orange" && !safetyChecks/);
+  assert.match(server, /project\?\.activity_type === "Intervenție Orange"\) return true|project\.activity_type === "Intervenție Orange"\) return true/);
+  assert.match(server, /safetyChecks\[project\.id\] = \{ pretask: false, ppe: false, completed: true \}/);
+  assert.match(filesRoute, /Tichetele Orange nu utilizează fotografii Pretask\/EIP/);
+});

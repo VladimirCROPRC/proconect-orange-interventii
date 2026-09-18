@@ -114,6 +114,26 @@ function normalizeRequestDate(value: unknown) {
   return parsed.getUTCFullYear() === year && parsed.getUTCMonth() === month - 1 && parsed.getUTCDate() === day ? value.trim() : "";
 }
 
+function technicianNames(input: ProjectRecord) {
+  const names = Array.isArray(input.technicians) && input.technicians.length ? input.technicians : input.technician ? [input.technician] : [];
+  return Array.from(new Set(names.map((name) => String(name).trim()).filter(Boolean))).slice(0, 25);
+}
+
+function encodedTechnicianUsernames(usernames: string[]) {
+  return usernames.length ? `|${usernames.join("|")}|` : "";
+}
+
+function decodedTechnicianUsernames(value: string) {
+  return value.startsWith("|") ? value.split("|").filter(Boolean) : value ? [value] : [];
+}
+
+async function resolveTechnicians(names: string[]) {
+  if (!names.length) return [];
+  const rows = await getRawDb().prepare("SELECT username, name FROM app_users WHERE role = 'Tehnician' AND active = 1 ORDER BY name").all<{ username: string; name: string }>();
+  const byName = new Map((rows.results ?? []).map((row) => [row.name, row]));
+  return names.map((name) => byName.get(name)).filter((row): row is { username: string; name: string } => Boolean(row));
+}
+
 export function hasValidPhotoCoordinates(value: string) {
   const coordinates = /^(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)(?:\s|$)/.exec(value.trim());
   if (!coordinates) return false;
@@ -133,6 +153,7 @@ export function isManagementRole(account: AuthenticatedAccount) {
 }
 
 function projectRowToRecord(row: ProjectRow): ProjectRecord {
+  const technicians = row.technician ? row.technician.split(" · ").map((name) => name.trim()).filter(Boolean) : [];
   return {
     id: row.id,
     activityType: row.activity_type,
@@ -152,6 +173,7 @@ function projectRowToRecord(row: ProjectRow): ProjectRecord {
     email: row.email,
     requirements: row.requirements,
     technician: row.technician,
+    technicians,
     cpe: row.cpe,
     cpeRequiresGrounding: Boolean(row.cpe_requires_grounding),
     sfp: Boolean(row.sfp),
@@ -232,30 +254,18 @@ export async function ensureProjectData() {
 export async function listProjectData(account: AuthenticatedAccount) {
   const query = isManagementRole(account)
     ? getRawDb().prepare("SELECT * FROM projects WHERE activity_type = 'Intervenție Orange' ORDER BY created_at DESC")
-    : getRawDb().prepare("SELECT * FROM projects WHERE activity_type = 'Intervenție Orange' AND technician_username = ? ORDER BY created_at DESC").bind(account.username);
+    : getRawDb().prepare("SELECT * FROM projects WHERE activity_type = 'Intervenție Orange' AND (technician_username = ? OR instr(technician_username, ?) > 0) ORDER BY created_at DESC").bind(account.username, `|${account.username}|`);
   const result = await query.all<ProjectRow>();
   const projects = (result.results ?? []).map((row: ProjectRow) => projectRowToRecord(row));
 
-  const safetyQuery = isManagementRole(account)
-    ? getRawDb().prepare("SELECT project_id, category FROM project_files WHERE section = 'safety' AND category IN ('pretask', 'ppe')")
-    : getRawDb()
-        .prepare("SELECT project_files.project_id, project_files.category FROM project_files INNER JOIN projects ON projects.id = project_files.project_id WHERE project_files.section = 'safety' AND project_files.category IN ('pretask', 'ppe') AND project_files.uploaded_by = ? AND projects.technician_username = ?")
-        .bind(account.username, account.username);
-  const safetyRows = await safetyQuery.all<{ project_id: string; category: "pretask" | "ppe" }>();
   const safetyChecks: Record<string, { pretask: boolean; ppe: boolean; completed: boolean }> = {};
-  for (const project of projects) safetyChecks[project.id] = { pretask: false, ppe: false, completed: false };
-  for (const row of safetyRows.results ?? []) {
-    const current = safetyChecks[row.project_id];
-    if (!current) continue;
-    current[row.category] = true;
-    current.completed = current.pretask && current.ppe;
-  }
+  for (const project of projects) safetyChecks[project.id] = { pretask: false, ppe: false, completed: true };
 
   const documentationQuery = isManagementRole(account)
     ? getRawDb().prepare("SELECT project_field_documentation.project_id, project_field_documentation.content_json FROM project_field_documentation")
     : getRawDb()
-        .prepare("SELECT project_field_documentation.project_id, project_field_documentation.content_json FROM project_field_documentation INNER JOIN projects ON projects.id = project_field_documentation.project_id WHERE projects.technician_username = ?")
-        .bind(account.username);
+        .prepare("SELECT project_field_documentation.project_id, project_field_documentation.content_json FROM project_field_documentation INNER JOIN projects ON projects.id = project_field_documentation.project_id WHERE projects.technician_username = ? OR instr(projects.technician_username, ?) > 0")
+        .bind(account.username, `|${account.username}|`);
   const documentationRows = await documentationQuery.all<{ project_id: string; content_json: string }>();
   const fieldDocumentation: Record<string, ProjectFieldDocumentation> = {};
   for (const row of documentationRows.results ?? []) {
@@ -287,16 +297,18 @@ export async function listProjectData(account: AuthenticatedAccount) {
 export async function getAuthorizedProject(projectId: string, account: AuthenticatedAccount) {
   const query = isManagementRole(account)
     ? getRawDb().prepare("SELECT * FROM projects WHERE id = ? AND activity_type = 'Intervenție Orange' LIMIT 1").bind(projectId)
-    : getRawDb().prepare("SELECT * FROM projects WHERE id = ? AND activity_type = 'Intervenție Orange' AND technician_username = ? LIMIT 1").bind(projectId, account.username);
+    : getRawDb().prepare("SELECT * FROM projects WHERE id = ? AND activity_type = 'Intervenție Orange' AND (technician_username = ? OR instr(technician_username, ?) > 0) LIMIT 1").bind(projectId, account.username, `|${account.username}|`);
   return query.first<ProjectRow>();
 }
 
 export async function hasCompletedProjectSafety(projectId: string, account: AuthenticatedAccount) {
   if (isManagementRole(account)) return true;
   if (account.role !== "Tehnician") return false;
+  const project = await getAuthorizedProject(projectId, account);
+  if (project?.activity_type === "Intervenție Orange") return true;
   const row = await getRawDb()
-    .prepare("SELECT COUNT(DISTINCT project_files.category) AS count FROM project_files INNER JOIN projects ON projects.id = project_files.project_id WHERE project_files.project_id = ? AND projects.technician_username = ? AND project_files.uploaded_by = ? AND project_files.section = 'safety' AND project_files.category IN ('pretask', 'ppe')")
-    .bind(projectId, account.username, account.username)
+    .prepare("SELECT COUNT(DISTINCT project_files.category) AS count FROM project_files INNER JOIN projects ON projects.id = project_files.project_id WHERE project_files.project_id = ? AND (projects.technician_username = ? OR instr(projects.technician_username, ?) > 0) AND project_files.uploaded_by = ? AND project_files.section = 'safety' AND project_files.category IN ('pretask', 'ppe')")
+    .bind(projectId, account.username, `|${account.username}|`, account.username)
     .first<{ count: number }>();
   return (row?.count ?? 0) >= 2;
 }
@@ -320,11 +332,9 @@ export async function createProject(input: ProjectRecord, createdBy: Authenticat
   const existing = await getRawDb().prepare("SELECT id FROM projects WHERE id = ? LIMIT 1").bind(workId).first();
   if (existing) return { error: activityType === "Intervenție" || activityType === "Intervenție Orange" ? "Numărul tichetului există deja. Verifică valoarea introdusă." : "Request ID există deja. Verifică numărul introdus.", status: 409 as const };
 
-  const technician = input.technician?.trim() ? await getRawDb()
-    .prepare("SELECT username, name FROM app_users WHERE name = ? AND role = 'Tehnician' AND active = 1 LIMIT 1")
-    .bind(input.technician.trim())
-    .first<{ username: string; name: string }>() : null;
-  if (input.technician?.trim() && !technician) return { error: "Tehnicianul selectat nu este disponibil.", status: 400 as const };
+  const requestedTechnicianNames = technicianNames(input);
+  const technicians = await resolveTechnicians(requestedTechnicianNames);
+  if (technicians.length !== requestedTechnicianNames.length) return { error: "Unul dintre tehnicienii selectați nu este disponibil.", status: 400 as const };
 
   const normalizedCpe = typeof input.cpe === "string" ? input.cpe.trim() : "";
   const catalogItem = activityType === "Instalare"
@@ -348,7 +358,8 @@ export async function createProject(input: ProjectRecord, createdBy: Authenticat
     phone: typeof input.phone === "string" ? input.phone.trim() : "",
     email: typeof input.email === "string" ? input.email.trim() : "",
     requirements: typeof input.requirements === "string" ? input.requirements.trim() : "",
-    technician: technician?.name ?? "",
+    technician: technicians.map((technician) => technician.name).join(" · "),
+    technicians: technicians.map((technician) => technician.name),
     cpe: catalogItem?.name ?? "",
     cpeRequiresGrounding: Boolean(catalogItem?.requires_grounding),
     mc: Boolean(input.mc),
@@ -359,8 +370,8 @@ export async function createProject(input: ProjectRecord, createdBy: Authenticat
     splice: input.splice || "Fișier neîncărcat",
   };
   await getRawDb().batch([
-    insertProjectStatement(project, technician?.username ?? "", createdBy.username),
-    ...(technician ? [getRawDb().prepare("UPDATE app_users SET jobs = jobs + 1, updated_at = ? WHERE username = ?").bind(Date.now(), technician.username)] : []),
+    insertProjectStatement(project, encodedTechnicianUsernames(technicians.map((technician) => technician.username)), createdBy.username),
+    ...technicians.map((technician) => getRawDb().prepare("UPDATE app_users SET jobs = jobs + 1, updated_at = ? WHERE username = ?").bind(Date.now(), technician.username)),
   ]);
   return { project };
 }
@@ -382,11 +393,9 @@ export async function updateProject(input: ProjectRecord) {
   const existing = await getRawDb().prepare("SELECT * FROM projects WHERE id = ? LIMIT 1").bind(input.id.toUpperCase()).first<ProjectRow>();
   if (!existing) return { error: "Proiectul selectat nu există.", status: 404 as const };
 
-  const technician = input.technician?.trim() ? await getRawDb()
-    .prepare("SELECT username, name FROM app_users WHERE name = ? AND role = 'Tehnician' AND active = 1 LIMIT 1")
-    .bind(input.technician.trim())
-    .first<{ username: string; name: string }>() : null;
-  if (input.technician?.trim() && !technician) return { error: "Tehnicianul selectat nu este disponibil.", status: 400 as const };
+  const requestedTechnicianNames = technicianNames(input);
+  const technicians = await resolveTechnicians(requestedTechnicianNames);
+  if (technicians.length !== requestedTechnicianNames.length) return { error: "Unul dintre tehnicienii selectați nu este disponibil.", status: 400 as const };
 
   const normalizedCpe = typeof input.cpe === "string" ? input.cpe.trim() : "";
   const catalogItem = activityType === "Instalare" && normalizedCpe !== existing.cpe
@@ -410,7 +419,8 @@ export async function updateProject(input: ProjectRecord) {
     phone: typeof input.phone === "string" ? input.phone.trim() : "",
     email: typeof input.email === "string" ? input.email.trim() : "",
     requirements: typeof input.requirements === "string" ? input.requirements.trim() : "",
-    technician: technician?.name ?? "",
+    technician: technicians.map((technician) => technician.name).join(" · "),
+    technicians: technicians.map((technician) => technician.name),
     cpe: activityType === "Instalare" ? (catalogItem?.name ?? existing.cpe) : "",
     cpeRequiresGrounding: activityType === "Instalare" ? Boolean(catalogItem ? catalogItem.requires_grounding : existing.cpe_requires_grounding) : false,
     sfp: Boolean(input.sfp),
@@ -443,7 +453,7 @@ export async function updateProject(input: ProjectRecord) {
       project.email,
       project.requirements,
       project.technician,
-      technician?.username ?? "",
+      encodedTechnicianUsernames(technicians.map((technician) => technician.username)),
       project.cpe,
       project.cpeRequiresGrounding ? 1 : 0,
       project.sfp ? 1 : 0,
@@ -459,10 +469,10 @@ export async function updateProject(input: ProjectRecord) {
     ),
   ];
 
-  if (existing.technician_username !== (technician?.username ?? "")) {
-    if (existing.technician_username) statements.push(getRawDb().prepare("UPDATE app_users SET jobs = CASE WHEN jobs > 0 THEN jobs - 1 ELSE 0 END, updated_at = ? WHERE username = ?").bind(now, existing.technician_username));
-    if (technician) statements.push(getRawDb().prepare("UPDATE app_users SET jobs = jobs + 1, updated_at = ? WHERE username = ?").bind(now, technician.username));
-  }
+  const previousUsernames = new Set(decodedTechnicianUsernames(existing.technician_username));
+  const nextUsernames = new Set(technicians.map((technician) => technician.username));
+  for (const username of previousUsernames) if (!nextUsernames.has(username)) statements.push(getRawDb().prepare("UPDATE app_users SET jobs = CASE WHEN jobs > 0 THEN jobs - 1 ELSE 0 END, updated_at = ? WHERE username = ?").bind(now, username));
+  for (const username of nextUsernames) if (!previousUsernames.has(username)) statements.push(getRawDb().prepare("UPDATE app_users SET jobs = jobs + 1, updated_at = ? WHERE username = ?").bind(now, username));
 
   await getRawDb().batch(statements);
   return { project };
@@ -487,9 +497,9 @@ export async function deleteProject(projectId: string) {
 
   await getRawDb().batch([
     getRawDb().prepare("DELETE FROM projects WHERE id = ?").bind(project.id),
-    getRawDb()
+    ...decodedTechnicianUsernames(project.technician_username).map((username) => getRawDb()
       .prepare("UPDATE app_users SET jobs = CASE WHEN jobs > 0 THEN jobs - 1 ELSE 0 END, updated_at = ? WHERE username = ?")
-      .bind(Date.now(), project.technician_username),
+      .bind(Date.now(), username)),
   ]);
 
   let cleanupFailures = 0;
@@ -815,10 +825,17 @@ export async function saveFieldDocumentation(projectId: string, section: string,
       }
       const incidentDescription = typeof intervention.documentation.incidentDescription === "string" ? intervention.documentation.incidentDescription.trim() : "";
       const remediationDescription = typeof intervention.documentation.remediationDescription === "string" ? intervention.documentation.remediationDescription.trim() : "";
+      const completedByTechnicians = Array.isArray(intervention.documentation.completedByTechnicians)
+        ? Array.from(new Set(intervention.documentation.completedByTechnicians.map((name) => String(name).trim()).filter(Boolean))).slice(0, 25)
+        : [];
+      const resolvedCompletedBy = await resolveTechnicians(completedByTechnicians);
       const closingTime = typeof intervention.documentation.closingTime === "string" ? intervention.documentation.closingTime.trim() : "";
       const closingDate = typeof intervention.documentation.closingDate === "string" ? intervention.documentation.closingDate.trim() : "";
       if (!incidentDescription || !remediationDescription || incidentDescription.length > 2_000 || remediationDescription.length > 2_000) {
         return { error: "Validează descrierea incidentului și descrierea remedierii.", status: 400 as const };
+      }
+      if (resolvedCompletedBy.length !== completedByTechnicians.length) {
+        return { error: "Unul dintre tehnicienii selectați pentru finalizarea intervenției nu este disponibil.", status: 400 as const };
       }
       const closingDateMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(closingDate);
       const closingDateValue = closingDateMatch ? new Date(Date.UTC(Number(closingDateMatch[1]), Number(closingDateMatch[2]) - 1, Number(closingDateMatch[3]))) : null;
@@ -852,6 +869,7 @@ export async function saveFieldDocumentation(projectId: string, section: string,
           report,
           incidentDescription,
           remediationDescription,
+          completedByTechnicians: resolvedCompletedBy.map((technician) => technician.name),
           closingDate,
           closingTime,
           services,
@@ -890,7 +908,7 @@ export async function saveFieldDocumentation(projectId: string, section: string,
 
   if (finalizedProject) {
     const materials = next.intervention?.execution?.materials ?? [];
-    const consumption = await buildInterventionConsumptionStatements(projectId, project.technician_username, materials, account, now, next.intervention?.documentation?.warehouseId);
+    const consumption = await buildInterventionConsumptionStatements(projectId, decodedTechnicianUsernames(project.technician_username)[0] ?? "", materials, account, now, next.intervention?.documentation?.warehouseId);
     if ("error" in consumption) return consumption;
     await getRawDb().batch([
       saveDocumentation,

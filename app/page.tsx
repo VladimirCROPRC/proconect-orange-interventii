@@ -430,7 +430,7 @@ export default function Home() {
   const displayedAccountName = currentAccount.name;
   const displayedAccountRole = currentAccount.role;
   const activeFieldDocumentation = fieldDocumentation[activeProject.id] ?? {};
-  const selectedSafetyComplete = canManageDocuments || Boolean(selected && safetyChecks[selected.id]?.completed);
+  const selectedSafetyComplete = canManageDocuments || selected?.activityType === "Intervenție Orange" || Boolean(selected && safetyChecks[selected.id]?.completed);
   const requiredClientPhotoKeys: ClientPhotoKey[] = [
     "report",
     ...(clientService === "Internet" || clientService === "Internet+OL" ? (["speed"] as ClientPhotoKey[]) : []),
@@ -448,7 +448,7 @@ export default function Home() {
         `${project.id} ${project.activityType} ${project.client} ${project.address} ${project.technician} ${project.requirements}`
           .toLowerCase()
           .includes(query);
-      const matchesTechnician = currentAccount.role !== "Tehnician" || project.technician === currentAccount.name;
+      const matchesTechnician = currentAccount.role !== "Tehnician" || (project.technicians ?? [project.technician]).includes(currentAccount.name);
       return matchesSearch && matchesTechnician && (filter === "Toate statusurile" || project.status === filter);
     });
   }, [currentAccount.name, currentAccount.role, currentActivityProjects, filter, search]);
@@ -661,7 +661,8 @@ export default function Home() {
       phone: isOrangeForm ? "-" : String(form.get("phone")),
       email: isOrangeForm ? "" : String(form.get("email")),
       requirements: String(form.get("requirements")),
-      technician: String(form.get("technician")),
+      technician: String(form.getAll("technicians")[0] ?? form.get("technician") ?? ""),
+      technicians: form.getAll("technicians").map(String).filter(Boolean),
       cpe: cpeName,
       cpeRequiresGrounding: Boolean(selectedCpe?.requiresGrounding),
       sfp: form.get("sfp") === "on",
@@ -700,7 +701,7 @@ export default function Home() {
       setProjects((current) => [payload.project!, ...current]);
       setSafetyChecks((current) => ({ ...current, [payload.project!.id]: { pretask: false, ppe: false, completed: false } }));
       setActiveProjectId((current) => current || payload.project!.id);
-      setAccounts((current) => current.map((account) => account.name === payload.project!.technician ? { ...account, jobs: account.jobs + 1 } : account));
+      setAccounts((current) => current.map((account) => (payload.project!.technicians ?? []).includes(account.name) ? { ...account, jobs: account.jobs + 1 } : account));
       closeModal();
       const failedUploads = uploadResults.filter((result) => result.status === "rejected").length;
       const warning = payload.warnings?.[0];
@@ -736,7 +737,8 @@ export default function Home() {
       phone: isOrangeForm ? "-" : String(form.get("phone") || ""),
       email: isOrangeForm ? "" : String(form.get("email") || ""),
       requirements: String(form.get("requirements") || ""),
-      technician: String(form.get("technician") || ""),
+      technician: String(form.getAll("technicians")[0] ?? form.get("technician") ?? ""),
+      technicians: form.getAll("technicians").map(String).filter(Boolean),
       cpe: cpeName,
       cpeRequiresGrounding: selectedCpe?.requiresGrounding ?? editingProject.cpeRequiresGrounding,
       sfp: form.get("sfp") === "on",
@@ -767,13 +769,11 @@ export default function Home() {
         ...(mapXtremeFile ? [uploadProjectFile({ projectId: project.id, section: "project", category: "mapxtreme", file: mapXtremeFile })] : []),
       ]);
       setProjects((current) => current.map((item) => item.id === project.id ? payload.project! : item));
-      if (editingProject.technician !== payload.project.technician) {
-        setAccounts((current) => current.map((account) => {
-          if (account.name === editingProject.technician) return { ...account, jobs: Math.max(0, account.jobs - 1) };
-          if (account.name === payload.project!.technician) return { ...account, jobs: account.jobs + 1 };
-          return account;
-        }));
-      }
+      const previousTechnicians = new Set(editingProject.technicians ?? (editingProject.technician ? editingProject.technician.split(" · ") : []));
+      const nextTechnicians = new Set(payload.project.technicians ?? (payload.project.technician ? payload.project.technician.split(" · ") : []));
+      setAccounts((current) => current.map((account) => previousTechnicians.has(account.name) === nextTechnicians.has(account.name)
+        ? account
+        : { ...account, jobs: nextTechnicians.has(account.name) ? account.jobs + 1 : Math.max(0, account.jobs - 1) }));
       closeModal();
       const failedUploads = uploadResults.filter((result) => result.status === "rejected").length;
       showToast(failedUploads ? `${project.id} a fost actualizat, dar ${failedUploads} fișier nu a putut fi încărcat.` : `${project.id} a fost actualizat și salvat permanent.`);
@@ -1079,7 +1079,7 @@ export default function Home() {
     if (nextProjectId === activeProjectId) return;
     const nextProject = projects.find((project) => project.id === nextProjectId);
     if (!nextProject) return;
-    if (currentAccount.role === "Tehnician" && !safetyChecks[nextProject.id]?.completed) {
+    if (currentAccount.role === "Tehnician" && nextProject.activityType !== "Intervenție Orange" && !safetyChecks[nextProject.id]?.completed) {
       setSafetyProject(nextProject);
       setSafetyDestination(view);
       return;
@@ -1098,7 +1098,7 @@ export default function Home() {
 
   function openProject(project: Project) {
     const destination: View = project.activityType === "Intervenție" || project.activityType === "Intervenție Orange" ? "intervention-workspace" : project.activityType === "Survey" ? "survey-workspace" : "client";
-    if (currentAccount.role === "Tehnician" && !safetyChecks[project.id]?.completed) {
+    if (currentAccount.role === "Tehnician" && project.activityType !== "Intervenție Orange" && !safetyChecks[project.id]?.completed) {
       setSelected(null);
       setSafetyProject(project);
       setSafetyDestination(destination);
@@ -1163,7 +1163,7 @@ export default function Home() {
       return;
     }
     const projectWorkspace = next === "client" || next === "route" || next === "splices" || next === "site" || next === "intervention-workspace" || next === "intervention-execution" || next === "survey-workspace";
-    if (projectWorkspace && currentAccount.role === "Tehnician" && destinationProject.id && !safetyChecks[destinationProject.id]?.completed) {
+    if (projectWorkspace && currentAccount.role === "Tehnician" && destinationProject.id && destinationProject.activityType !== "Intervenție Orange" && !safetyChecks[destinationProject.id]?.completed) {
       setSafetyProject(destinationProject);
       setSafetyDestination(next);
       return;
@@ -1371,11 +1371,11 @@ export default function Home() {
 
               <div className="table-wrap">
                 <table>
-                  <thead><tr><th>{currentListView === "interventions" || currentListView === "orange-interventions" ? "NUMĂR TICHET" : "REQUEST ID"}</th><th>{currentListView === "orange-interventions" ? "SITE A / SITE B" : "CLIENT / ADRESĂ"}</th><th>TEHNICIAN</th><th>STATUS</th><th>PROGRAMARE</th><th /></tr></thead>
+                  <thead><tr><th>{currentListView === "interventions" || currentListView === "orange-interventions" ? "NUMĂR TICHET" : "REQUEST ID"}</th><th>{currentListView === "orange-interventions" ? "SITE A / SITE B" : "CLIENT / ADRESĂ"}</th><th>TEHNICIENI</th><th>STATUS</th><th>PROGRAMARE</th><th /></tr></thead>
                   <tbody>
                     {filteredProjects.map((project) => (
                       <tr className={project.id === activeProject.id ? "active-project-row" : ""} key={project.id} onClick={() => setSelected(project)} tabIndex={0} onKeyDown={(event) => event.key === "Enter" && setSelected(project)}>
-                        <td><strong className="rid">{project.id}</strong>{project.activityType === "Intervenție" && <small>{project.orderNumber ? `Comandă: ${project.orderNumber}` : "Fără număr de comandă"}</small>}<small>{currentAccount.role === "Tehnician" ? safetyChecks[project.id]?.completed ? "Pretask și EIP completate" : "🔒 Pretask și EIP necesare" : project.id === activeProject.id ? project.activityType === "Intervenție" ? "Tichet activ" : "Proiect activ" : "Salvat permanent"}</small></td>
+                        <td><strong className="rid">{project.id}</strong>{project.activityType === "Intervenție" && <small>{project.orderNumber ? `Comandă: ${project.orderNumber}` : "Fără număr de comandă"}</small>}<small>{currentAccount.role === "Tehnician" && project.activityType !== "Intervenție Orange" ? safetyChecks[project.id]?.completed ? "Pretask și EIP completate" : "🔒 Pretask și EIP necesare" : project.id === activeProject.id ? project.activityType === "Intervenție" ? "Tichet activ" : "Proiect activ" : "Salvat permanent"}</small></td>
                         <td><strong>{project.client}</strong><small>{project.address || (project.activityType === "Intervenție Orange" ? "Fără site B" : "")}</small></td>
                         <td><div className="technician"><span className="avatar">{initials(project.technician)}</span><strong>{project.technician}</strong></div></td>
                         <td><span className={statusClass[project.status]}><i />{project.status}</span></td>
@@ -1664,8 +1664,10 @@ export default function Home() {
               </div></div>
               <div className="form-section"><h3><span>2</span> {isInstallationForm ? "Alocare și echipamente" : "Alocare tehnician"}</h3><div className="form-grid">
                 {currentAccount.role === "Tehnician" && formActivityType === "Intervenție Orange" && !editingProject
-                  ? <label><span>Tehnician alocat</span><input name="technician" readOnly value={currentAccount.name} /><small>Tichetul va fi alocat automat contului tău.</small></label>
-                  : <label><span>Tehnician alocat{isOrangeForm ? "" : " *"}</span><select name="technician" required={!isOrangeForm} defaultValue={editingProject?.technician || ""}><option value="">Selectează tehnicianul</option>{technicians.map((tech) => <option key={tech.username}>{tech.name}</option>)}</select></label>}
+                  ? <label><span>Tehnicieni alocați</span><input name="technician" readOnly value={currentAccount.name} /><small>Tichetul va fi alocat automat contului tău.</small></label>
+                  : isOrangeForm
+                    ? <div className="wide"><span className="field-label">Tehnicieni alocați</span><div className="switch-row">{technicians.map((tech) => <label className="switch-card" key={tech.username}><span><b>{tech.name}</b><small>@{tech.username}</small></span><input type="checkbox" name="technicians" value={tech.name} defaultChecked={(editingProject?.technicians ?? (editingProject?.technician ? editingProject.technician.split(" · ") : [])).includes(tech.name)} /><i /></label>)}</div></div>
+                    : <label><span>Tehnician alocat *</span><select name="technician" required defaultValue={editingProject?.technician || ""}><option value="">Selectează tehnicianul</option>{technicians.map((tech) => <option key={tech.username}>{tech.name}</option>)}</select></label>}
                 {isInstallationForm && <label><span>Tip CPE *</span><select name="cpe" required defaultValue={editingProject?.cpe || ""}><option value="" disabled>{cpeList.length ? "Selectează echipamentul" : "Catalogul CPE este gol"}</option>{editingProject?.cpe && !cpeList.some((cpe) => cpe.name === editingProject.cpe) && <option value={editingProject.cpe}>{editingProject.cpe} (echipament istoric)</option>}{cpeList.map((cpe) => <option key={cpe.name} value={cpe.name}>{cpe.name}{cpe.requiresGrounding ? " · necesită împământare" : ""}</option>)}</select><small>Adaugă și configurează echipamentele din secțiunea CPE.</small></label>}
                 {editingProject && <><label><span>Status proiect *</span><select name="status" required defaultValue={editingProject.status}><option>Planificat</option><option>În desfășurare</option><option>De verificat</option><option>Finalizat</option></select></label><label><span>Programare *</span><input name="date" required defaultValue={editingProject.date} /></label></>}
                 {isInstallationForm && <div className="wide"><span className="field-label">Echipamente suplimentare</span><div className="switch-row">
@@ -1722,7 +1724,7 @@ export default function Home() {
         <div className="drawer-section"><small>{selected.activityType === "Intervenție Orange" ? "SITE-URI ORANGE" : "LOCAȚIE ȘI CONTACT"}</small><strong>{selected.activityType === "Intervenție Orange" ? `Site A: ${selected.client}` : selected.address}</strong>{selected.activityType === "Intervenție Orange" ? <p>Site B: {selected.address || "Nu este specificat"}</p> : <><p>{selected.contact} · {selected.phone}</p><p>{selected.email}</p></>}</div>
         {!selectedSafetyComplete && <div className="drawer-safety-lock"><span>🔒</span><div><strong>Lucrare blocată</strong><p>Încarcă fotografia Pretask și fotografia cu echipamentul individual de protecție pentru a vedea cerințele și operațiunile.</p></div></div>}
         {selectedSafetyComplete && <><div className="drawer-section"><small>{selected.activityType === "Intervenție Orange" ? "DESCRIERE" : "CERINȚELE LUCRĂRII"}</small><p className="requirements-text">{selected.requirements}</p></div>
-        <div className="drawer-section"><small>TEHNICIAN ALOCAT</small><div className="technician large"><span className="avatar">{initials(selected.technician)}</span><div><strong>{selected.technician}</strong><p>Programare: {selected.date}</p></div></div></div>
+        <div className="drawer-section"><small>TEHNICIENI ALOCAȚI</small><div className="technician large"><span className="avatar">{initials(selected.technician)}</span><div><strong>{selected.technician || "Nealocat"}</strong><p>Programare: {selected.date}</p></div></div></div>
         {selected.activityType === "Instalare" && <div className="drawer-section"><small>ECHIPAMENTE</small><strong>{selected.cpe}</strong><div className="tag-row">{selected.cpeRequiresGrounding && <span>Împământare obligatorie</span>}{selected.sfp && <span>SFP</span>}{selected.mc && <span>MC</span>}{selected.terminalBox && <span>Terminal Box</span>}</div></div>}
         {selected.activityType === "Instalare" && <div className="drawer-section"><small>DOCUMENTE</small><button className="file-row" onClick={() => void openProjectFile(selected.id, "ipwo")}><span>PDF</span><div><strong>{selected.ipwo}</strong><small>IPWO</small></div><b>↗</b></button><button className="file-row" onClick={() => void openProjectFile(selected.id, "splice-diagram")}><span>FO</span><div><strong>{selected.splice}</strong><small>Diagramă suduri</small></div><b>↗</b></button></div>}
         <div className="drive-folder"><span className="folder-icon">▰</span><div><small>{driveStatus?.folders[selected.id] ? "GOOGLE DRIVE" : "STOCARE SECURIZATĂ"}</small><strong>Dosar {selected.id}</strong></div>{driveStatus?.folders[selected.id] ? <a className="drive-folder-open" href={driveStatus.folders[selected.id]} target="_blank" rel="noreferrer" aria-label={`Deschide dosarul Google Drive ${selected.id}`}>↗</a> : <span>✓</span>}</div></>}

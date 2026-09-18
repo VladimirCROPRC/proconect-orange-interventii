@@ -137,18 +137,22 @@ function projectValues(project: ProjectRow) {
   let intervention: {
     assessment?: { cause?: string; arrivedAt?: number; documentedAt?: number; incidentDescription?: string; damageLocation?: { lat?: number; lon?: number; placedAt?: number } };
     execution?: { remediationDescription?: string };
-    documentation?: { validatedAt?: number; validatedBy?: string; closingDate?: string; closingTime?: string; incidentDescription?: string; remediationDescription?: string };
+    documentation?: { validatedAt?: number; validatedBy?: string; completedByTechnicians?: string[]; closingDate?: string; closingTime?: string; incidentDescription?: string; remediationDescription?: string };
   } = {};
   try { intervention = project.content_json ? (JSON.parse(project.content_json).intervention ?? {}) : {}; } catch { intervention = {}; }
   const assessment = intervention.assessment;
   const location = assessment?.damageLocation;
   const validated = intervention.documentation;
+  const completedBy = Array.isArray(validated?.completedByTechnicians) && validated.completedByTechnicians.length
+    ? validated.completedByTechnicians.join(" · ")
+    : project.technician;
   return {
     section: project.fo_section_name,
     ticket: project.id,
     locality: project.departure_locality,
     county: project.county,
     technician: project.technician,
+    completedBy,
     responsible: validated?.validatedBy ?? "",
     topology: project.topology,
     status: project.status === "Finalizat" ? "Raport finalizat" : assessment ? "În lucru" : "Tichet generat",
@@ -173,7 +177,7 @@ function renderRow(project: ProjectRow, row: number) {
     textCell(`B${row}`, value.section) + textCell(`D${row}`, value.ticket) + textCell(`E${row}`, value.locality) +
     textCell(`F${row}`, value.county, "5") + textCell(`G${row}`, value.responsible) + textCell(`H${row}`, value.topology, "18") +
     textCell(`I${row}`, value.status, "18") + textCell(`J${row}`, value.sla) + textCell(`K${row}`, "", "20") +
-    textCell(`L${row}`, value.created, "18") + textCell(`M${row}`, value.technician) + textCell(`N${row}`, value.technician, "18") +
+    textCell(`L${row}`, value.created, "18") + textCell(`M${row}`, value.technician) + textCell(`N${row}`, value.completedBy, "18") +
     textCell(`O${row}`, value.arrived, "3") + textCell(`P${row}`, value.located, "22") + textCell(`Q${row}`, value.completed) +
     numberCell(`R${row}`, value.capacity) + textCell(`S${row}`, value.cause) + textCell(`U${row}`, value.incident, "21") +
     textCell(`V${row}`, value.remediation) + textCell(`W${row}`, value.coordinates) + textCell(`X${row}`, value.details) + `</row>`;

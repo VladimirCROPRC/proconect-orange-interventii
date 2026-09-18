@@ -172,7 +172,9 @@ export function InterventionOperationsSection({
   const [reviewMaterialKey, setReviewMaterialKey] = useState("");
   const [reviewMaterialQuantity, setReviewMaterialQuantity] = useState("");
   const [warehouses, setWarehouses] = useState<InventoryWarehouse[]>([]);
+  const [availableTechnicians, setAvailableTechnicians] = useState<InventoryTechnician[]>([]);
   const [selectedWarehouseId, setSelectedWarehouseId] = useState(initialSummary?.documentation?.warehouseId ?? "");
+  const [completedByTechnicians, setCompletedByTechnicians] = useState<string[]>(initialSummary?.documentation?.completedByTechnicians ?? []);
   const [reviewServices, setReviewServices] = useState(initialSummary?.documentation?.services ?? []);
   const [serviceCode, setServiceCode] = useState("");
   const [serviceQuantity, setServiceQuantity] = useState("1");
@@ -223,8 +225,10 @@ export function InterventionOperationsSection({
         if (!response.ok) throw new Error(payload.error || "Magaziile nu sunt disponibile.");
         if (!mounted) return;
         const available = payload.warehouses ?? [];
-        const assigned = (payload.technicians ?? []).find((technician) => technician.name === project.technician)?.warehouse_id ?? "";
+        const technicians = payload.technicians ?? [];
+        const assigned = technicians.find((technician) => (project.technicians ?? project.technician.split(" · ")).includes(technician.name))?.warehouse_id ?? "";
         setWarehouses(available);
+        setAvailableTechnicians(technicians);
         setSelectedWarehouseId((current) => current || initialSummary?.documentation?.warehouseId || assigned);
       })
       .catch((failure) => { if (mounted) onNotify(failure instanceof Error ? failure.message : "Magaziile nu sunt disponibile."); });
@@ -240,6 +244,7 @@ export function InterventionOperationsSection({
       if (mounted) setReviewMaterials(initialSummary?.execution?.materials ?? []);
       if (mounted) setSelectedWarehouseId(initialSummary?.documentation?.warehouseId ?? "");
       if (mounted) setReviewServices(initialSummary?.documentation?.services ?? []);
+      if (mounted) setCompletedByTechnicians(initialSummary?.documentation?.completedByTechnicians ?? []);
       if (mounted) setClosingDate(initialSummary?.documentation?.closingDate ?? "");
       if (mounted) setClosingTime(initialSummary?.documentation?.closingTime ?? "");
     });
@@ -380,6 +385,7 @@ export function InterventionOperationsSection({
           remediationDescription: reviewRemediation.trim(),
           closingDate,
           closingTime,
+          completedByTechnicians,
           services: reviewServices,
           ...(selectedWarehouseId ? { warehouseId: selectedWarehouseId } : {}),
           validatedAt: 0,
@@ -678,6 +684,9 @@ export function InterventionOperationsSection({
                 <label className="intervention-damage-field"><span>Ora de închidere *</span><input type="time" required value={closingTime} readOnly={project.status === "Finalizat"} onChange={(event) => setClosingTime(event.target.value)} /></label>
               </div>
               <small>Data și ora sunt introduse manual de coordonator și se transmit în QAF și Centralizator.</small>
+
+              <div className="card-heading"><div><h2>Tehnicieni care au finalizat intervenția</h2><p>Selecția este opțională. Fără selecție, Centralizatorul va folosi echipa alocată inițial.</p></div></div>
+              <div className="switch-row">{availableTechnicians.map((technician) => <label className="switch-card" key={technician.username}><span><b>{technician.name}</b><small>@{technician.username}</small></span><input type="checkbox" checked={completedByTechnicians.includes(technician.name)} onChange={(event) => setCompletedByTechnicians((current) => event.target.checked ? [...current, technician.name] : current.filter((name) => name !== technician.name))} /><i /></label>)}</div>
 
               <div className="card-heading"><div><h2>Materiale validate</h2><p>Coordonatorul poate corecta lista înainte de generarea QAF.</p></div></div>
               <label className="intervention-damage-field">

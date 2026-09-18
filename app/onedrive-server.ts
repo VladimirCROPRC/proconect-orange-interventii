@@ -252,7 +252,7 @@ export async function syncOrangeTicketWorkbook(projectId: string) {
   let intervention: {
     assessment?: { arrivedAt?: number; documentedAt?: number; incidentDescription?: string; damageLocation?: { lat?: number; lon?: number; placedAt?: number } };
     execution?: { remediationDescription?: string };
-    documentation?: { validatedAt?: number; validatedBy?: string; closingDate?: string; closingTime?: string; incidentDescription?: string; remediationDescription?: string };
+    documentation?: { validatedAt?: number; validatedBy?: string; completedByTechnicians?: string[]; closingDate?: string; closingTime?: string; incidentDescription?: string; remediationDescription?: string };
   } = {};
   try { intervention = project.documentation_json ? (JSON.parse(project.documentation_json).intervention ?? {}) : {}; } catch { intervention = {}; }
   const assessment = intervention.assessment;
@@ -260,6 +260,9 @@ export async function syncOrangeTicketWorkbook(projectId: string) {
   const damageLocation = assessment?.damageLocation;
   const incidentDescription = documentation?.incidentDescription ?? assessment?.incidentDescription ?? project.requirements;
   const remediationDescription = documentation?.remediationDescription ?? intervention.execution?.remediationDescription ?? "";
+  const completedBy = Array.isArray(documentation?.completedByTechnicians) && documentation.completedByTechnicians.length
+    ? documentation.completedByTechnicians.join(" · ")
+    : project.technician;
 
   const token = await tokenFor(c);
   const shareId = `u!${base64url(encoder.encode(workbookUrl))}`;
@@ -297,7 +300,7 @@ export async function syncOrangeTicketWorkbook(projectId: string) {
   values[9] = project.sla;
   values[11] = orangeRequestTimestamp(project.scheduled_label, project.created_at);
   values[12] = project.technician;
-  values[13] = project.technician;
+  values[13] = completedBy;
   values[14] = assessment?.arrivedAt ? bucharestTimestamp(assessment.arrivedAt) : "";
   values[15] = damageLocation?.placedAt || assessment?.documentedAt ? bucharestTimestamp(damageLocation?.placedAt ?? assessment!.documentedAt!) : "";
   values[16] = orangeClosingTimestamp(documentation?.validatedAt, documentation?.closingDate, documentation?.closingTime);

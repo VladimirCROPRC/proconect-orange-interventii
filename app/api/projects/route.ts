@@ -30,7 +30,7 @@ export async function POST(request: Request) {
     }
     await ensureProjectData();
     const project = technicianCreatesIntervention
-      ? { ...body.project, technician: session.account.name }
+      ? { ...body.project, technician: session.account.name, technicians: [session.account.name] }
       : body.project;
     const result = await createProject(project, session.account);
     if ("error" in result) return Response.json({ error: result.error }, { status: result.status });
