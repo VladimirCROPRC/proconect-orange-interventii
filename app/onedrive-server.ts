@@ -219,13 +219,25 @@ export async function syncOrangeTicketWorkbook(projectId: string) {
   const c = await connection();
   if (!c?.refresh_token) throw new Error("Conectează contul Microsoft 365 pentru registrul tichetelor Orange.");
   const project = await getRawDb().prepare(
-    "SELECT id, activity_type, fo_section_name, topology, cable_capacity, route_type, orange_intervention_type, sla, departure_locality, county, requirements, technician, created_at FROM projects WHERE id = ? LIMIT 1",
+    "SELECT projects.id, projects.activity_type, projects.fo_section_name, projects.topology, projects.cable_capacity, projects.route_type, projects.orange_intervention_type, projects.sla, projects.departure_locality, projects.county, projects.requirements, projects.technician, projects.created_at, projects.status, project_field_documentation.content_json AS documentation_json FROM projects LEFT JOIN project_field_documentation ON project_field_documentation.project_id = projects.id WHERE projects.id = ? LIMIT 1",
   ).bind(projectId).first<{
     id: string; activity_type: string; fo_section_name: string; topology: string; cable_capacity: number;
     route_type: string; orange_intervention_type: string; sla: string; departure_locality: string; county: string;
-    requirements: string; technician: string; created_at: number;
+    requirements: string; technician: string; created_at: number; status: string; documentation_json?: string;
   }>();
   if (!project || project.activity_type !== "Intervenție Orange") return { configured: true, written: false };
+
+  let intervention: {
+    assessment?: { arrivedAt?: number; documentedAt?: number; incidentDescription?: string; damageLocation?: { lat?: number; lon?: number; placedAt?: number } };
+    execution?: { remediationDescription?: string };
+    documentation?: { validatedAt?: number; validatedBy?: string; incidentDescription?: string; remediationDescription?: string };
+  } = {};
+  try { intervention = project.documentation_json ? (JSON.parse(project.documentation_json).intervention ?? {}) : {}; } catch { intervention = {}; }
+  const assessment = intervention.assessment;
+  const documentation = intervention.documentation;
+  const damageLocation = assessment?.damageLocation;
+  const incidentDescription = documentation?.incidentDescription ?? assessment?.incidentDescription ?? project.requirements;
+  const remediationDescription = documentation?.remediationDescription ?? intervention.execution?.remediationDescription ?? "";
 
   const token = await tokenFor(c);
   const shareId = `u!${base64url(encoder.encode(workbookUrl))}`;
@@ -238,37 +250,49 @@ export async function syncOrangeTicketWorkbook(projectId: string) {
 
   const workbook = `/drives/${encodeURIComponent(driveId)}/items/${encodeURIComponent(itemId)}/workbook`;
   const ticketColumn = await graph(token, `${workbook}/tables/Table1/columns/${encodeURIComponent("Ticket ID")}/dataBodyRange?$select=values`);
+  let existingIndex = -1;
   if (ticketColumn.ok) {
     const range = await ticketColumn.json() as WorkbookRange;
-    const alreadyExists = (range.values ?? []).some((row) => String(row[0] ?? "").trim().toUpperCase() === project.id.toUpperCase());
-    if (alreadyExists) return { configured: true, written: false, duplicate: true };
+    existingIndex = (range.values ?? []).findIndex((row) => String(row[0] ?? "").trim().toUpperCase() === project.id.toUpperCase());
   } else if (ticketColumn.status !== 404) {
     await graphJson(ticketColumn);
   }
 
   // Table1 in the existing ENO3 centralizer spans A:AE (31 columns).
   // Microsoft Graph rejects rows whose value count differs from the table width.
-  const values = Array.from({ length: 31 }, () => "") as Array<string | number>;
+  let values = Array.from({ length: 31 }, () => "") as Array<string | number>;
+  if (existingIndex >= 0) {
+    const existingRow = await graphJson<WorkbookRange>(await graph(token, `${workbook}/tables/Table1/rows/itemAt(index=${existingIndex})/range?$select=values`));
+    if (existingRow.values?.[0]?.length === 31) values = existingRow.values[0].map((value) => typeof value === "number" ? value : String(value ?? ""));
+  }
   values[1] = project.fo_section_name;
   values[3] = project.id;
   values[4] = project.departure_locality;
   values[5] = project.county;
-  values[6] = project.technician;
+  values[6] = documentation?.validatedBy ?? "";
   values[7] = project.topology;
-  values[8] = "Tichet generat";
+  values[8] = project.status === "Finalizat" ? "Raport finalizat" : assessment ? "În lucru" : "Tichet generat";
   values[9] = project.sla;
   values[11] = bucharestTimestamp(project.created_at);
   values[12] = project.technician;
+  values[13] = project.technician;
+  values[14] = assessment?.arrivedAt ? bucharestTimestamp(assessment.arrivedAt) : "";
+  values[15] = damageLocation?.placedAt || assessment?.documentedAt ? bucharestTimestamp(damageLocation?.placedAt ?? assessment!.documentedAt!) : "";
+  values[16] = documentation?.validatedAt ? bucharestTimestamp(documentation.validatedAt) : "";
   values[17] = project.cable_capacity;
-  values[20] = project.requirements;
-  values[23] = [project.route_type, project.orange_intervention_type].filter(Boolean).join(" · ");
+  values[18] = incidentDescription;
+  values[20] = "";
+  values[21] = remediationDescription;
+  values[22] = typeof damageLocation?.lat === "number" && typeof damageLocation?.lon === "number" ? `${damageLocation.lat.toFixed(6)}, ${damageLocation.lon.toFixed(6)}` : "";
+  values[23] = "";
 
-  await graphJson(await graph(token, `${workbook}/tables/Table1/rows/add`, {
-    method: "POST",
+  const rowPath = existingIndex >= 0 ? `${workbook}/tables/Table1/rows/itemAt(index=${existingIndex})/range` : `${workbook}/tables/Table1/rows/add`;
+  await graphJson(await graph(token, rowPath, {
+    method: existingIndex >= 0 ? "PATCH" : "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ index: null, values: [values] }),
+    body: JSON.stringify(existingIndex >= 0 ? { values: [values] } : { index: null, values: [values] }),
   }));
-  return { configured: true, written: true };
+  return { configured: true, written: existingIndex < 0, updated: existingIndex >= 0 };
 }
 
 async function tokenFor(c: Connection) {
