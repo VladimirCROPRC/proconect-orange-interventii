@@ -64,10 +64,11 @@ function writeQuantity(xml: string, cell: string, quantity: number) {
 
 async function orangeDocumentation(projectId: string) {
   const row = await getRawDb().prepare(
-    "SELECT projects.client, projects.address, projects.fo_section_name, projects.topology, projects.cable_capacity, projects.route_type, projects.orange_intervention_type, projects.sla, projects.departure_locality, project_field_documentation.content_json FROM projects LEFT JOIN project_field_documentation ON project_field_documentation.project_id = projects.id WHERE projects.id = ? LIMIT 1",
+    "SELECT projects.client, projects.address, projects.fo_section_name, projects.topology, projects.cable_capacity, projects.route_type, projects.orange_intervention_type, projects.sla, projects.departure_locality, projects.status, projects.updated_at, project_field_documentation.content_json, project_field_documentation.updated_at AS documentation_updated_at FROM projects LEFT JOIN project_field_documentation ON project_field_documentation.project_id = projects.id WHERE projects.id = ? LIMIT 1",
   ).bind(projectId).first<{
     client: string; address: string; fo_section_name: string; topology: string; cable_capacity: number;
-    route_type: string; orange_intervention_type: string; sla: string; departure_locality: string; content_json: string | null;
+    route_type: string; orange_intervention_type: string; sla: string; departure_locality: string; status: string; updated_at: number;
+    content_json: string | null; documentation_updated_at: number | null;
   }>();
   if (!row) return null;
   let materials: Material[] = [];
@@ -116,8 +117,11 @@ async function orangeDocumentation(projectId: string) {
       "SELECT original_name FROM project_files WHERE project_id = ? AND section = 'intervention-assessment' AND category = 'site-measurement' ORDER BY created_at ASC",
     ).bind(projectId).all<{ original_name: string }>()
     : { results: [] as Array<{ original_name: string }> };
+  const validationTimestamp = validatedAt
+    ?? (validatedBy ? row.documentation_updated_at ?? row.updated_at : undefined)
+    ?? (row.status === "Finalizat" ? row.updated_at : undefined);
   return {
-    materials, damageLocation, documentedAt, cause, siteMeasurement, arrivedAt, incidentDescription, remediationDescription, validatedAt, validatedBy, services,
+    materials, damageLocation, documentedAt, cause, siteMeasurement, arrivedAt, incidentDescription, remediationDescription, validatedAt: validationTimestamp, validatedBy, services,
     measurementPhotoNames: (measurementPhotos.results ?? []).map((photo) => photo.original_name).filter(Boolean),
     newJunctions: activities
       .filter((activity) => activity.type === "junction-installation" && activity.junction?.kind === "new")
