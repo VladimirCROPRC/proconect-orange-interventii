@@ -23,7 +23,7 @@ test("uses dedicated Orange Cloudflare resources", async () => {
   const wrangler = await source("wrangler.jsonc");
   assert.match(wrangler, /proconect-orange-interventii-db/);
   assert.match(wrangler, /proconect-orange-interventii-files/);
-  assert.match(wrangler, /YOUR_ORANGE_D1_DATABASE_ID/);
+  assert.match(wrangler, /"database_id"\s*:\s*"[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}"/i);
   assert.doesNotMatch(wrangler, /6624aba0-1008-423d-8599-1e840a60cadc/);
 
   const forbidden = [["op", "tix"].join(""), ["voda", "fone"].join("")];
