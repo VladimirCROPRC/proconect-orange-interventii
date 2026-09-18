@@ -124,7 +124,7 @@ function projectValues(project: ProjectRow) {
   let intervention: {
     assessment?: { cause?: string; arrivedAt?: number; documentedAt?: number; incidentDescription?: string; damageLocation?: { lat?: number; lon?: number; placedAt?: number } };
     execution?: { remediationDescription?: string };
-    documentation?: { validatedAt?: number; incidentDescription?: string; remediationDescription?: string };
+    documentation?: { validatedAt?: number; validatedBy?: string; incidentDescription?: string; remediationDescription?: string };
   } = {};
   try { intervention = project.content_json ? (JSON.parse(project.content_json).intervention ?? {}) : {}; } catch { intervention = {}; }
   const assessment = intervention.assessment;
@@ -136,6 +136,7 @@ function projectValues(project: ProjectRow) {
     locality: project.departure_locality,
     county: project.county,
     technician: project.technician,
+    responsible: validated?.validatedBy ?? "",
     topology: project.topology,
     status: project.status === "Finalizat" ? "Raport finalizat" : assessment ? "În lucru" : "Tichet generat",
     sla: project.sla,
@@ -144,11 +145,11 @@ function projectValues(project: ProjectRow) {
     located: bucharestTimestamp(location?.placedAt ?? assessment?.documentedAt),
     completed: bucharestTimestamp(validated?.validatedAt),
     capacity: project.cable_capacity,
-    cause: assessment?.cause ?? "",
-    incident: validated?.incidentDescription ?? assessment?.incidentDescription ?? project.requirements,
+    cause: validated?.incidentDescription ?? assessment?.incidentDescription ?? project.requirements,
+    incident: "",
     remediation: validated?.remediationDescription ?? intervention.execution?.remediationDescription ?? "",
     coordinates: typeof location?.lat === "number" && typeof location?.lon === "number" ? `${location.lat.toFixed(6)}, ${location.lon.toFixed(6)}` : "",
-    details: [project.route_type, project.orange_intervention_type].filter(Boolean).join(" · "),
+    details: "",
   };
 }
 
@@ -157,7 +158,7 @@ function renderRow(project: ProjectRow, row: number) {
   return `<row r="${row}" spans="1:31" ht="15" customHeight="1">` +
     `<c r="A${row}" s="60"><f>ROW() - ROW(Table1[[#Headers],[s]])</f><v>${row - 1}</v></c>` +
     textCell(`B${row}`, value.section) + textCell(`D${row}`, value.ticket) + textCell(`E${row}`, value.locality) +
-    textCell(`F${row}`, value.county, "5") + textCell(`G${row}`, value.technician) + textCell(`H${row}`, value.topology, "18") +
+    textCell(`F${row}`, value.county, "5") + textCell(`G${row}`, value.responsible) + textCell(`H${row}`, value.topology, "18") +
     textCell(`I${row}`, value.status, "18") + textCell(`J${row}`, value.sla) + textCell(`K${row}`, "", "20") +
     textCell(`L${row}`, value.created, "18") + textCell(`M${row}`, value.technician) + textCell(`N${row}`, value.technician, "18") +
     textCell(`O${row}`, value.arrived, "3") + textCell(`P${row}`, value.located, "22") + textCell(`Q${row}`, value.completed) +
