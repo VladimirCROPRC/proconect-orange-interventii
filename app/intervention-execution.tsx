@@ -22,6 +22,7 @@ type OrangeNetworkSiteRow = [code: string, description: string, region: string, 
 type OrangeNetworkPayload = { sites: OrangeNetworkSiteRow[] };
 type MapMode = "documented" | "undocumented" | "draw" | "pan";
 type JunctionSlot = "a" | "b" | "junction";
+type JunctionPhotoKind = "junction-open" | "junction-closed" | "junction-site";
 type DraftJunction = Omit<InterventionJunction, "kind" | "network"> & {
   kind: "" | "documented" | "existing" | "new";
   network: "" | "mobile" | "fixed";
@@ -48,6 +49,11 @@ const MAP_WIDTH = 1000;
 const MAP_HEIGHT = 600;
 const TILE_SIZE = 256;
 const DEFAULT_CENTER = { lat: 44.4268, lon: 26.1025 };
+const junctionPhotoSlots: Array<{ kind: JunctionPhotoKind; label: string }> = [
+  { kind: "junction-open", label: "Joncțiune deschisă" },
+  { kind: "junction-closed", label: "Joncțiune închisă" },
+  { kind: "junction-site", label: "Joncțiune pe amplasament" },
+];
 
 const activityCatalog: Record<InterventionActivityType, { title: string; short: string; description: string; badge: string }> = {
   "fo-installation": {
@@ -338,15 +344,20 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
   const mappedDistance = routeCoordinates.slice(1).reduce((sum, point, index) => sum + distanceBetween(routeCoordinates[index], point), 0);
   const cableLength = Number(draft?.cableLength.replace(",", ".") ?? "");
   const cableLengthValid = Number.isFinite(cableLength) && cableLength > 0 && cableLength <= 1_000_000;
-  const requiredPhotos = draft?.type === "fo-installation" ? requiredInterventionCablePhotos(cableLengthValid ? cableLength : 0) : draft?.type === "chamber-installation" ? 2 : draft?.type ? 1 : 0;
-  const activityPhotos = draft ? photos.filter((photo) => photo.category === `${draft.id}:photo` && validGeo(photo.geo)) : [];
+  const aerialCableInstallation = draft?.type === "fo-installation" && initialSummary?.assessment?.routeType === "Aerian";
+  const requiredPhotos = draft?.type === "fo-installation"
+    ? aerialCableInstallation ? requiredInterventionCablePhotos(cableLengthValid ? cableLength : 0) : 1
+    : draft?.type === "junction-installation" ? 3
+      : draft?.type === "chamber-installation" ? 2 : draft?.type ? 1 : 0;
+  const activityPhotos = draft ? photos.filter((photo) => photo.category.startsWith(`${draft.id}:`) && validGeo(photo.geo)) : [];
+  const junctionPhotosReady = draft?.type !== "junction-installation" || junctionPhotoSlots.every(({ kind }) => activityPhotos.some((photo) => photo.category === `${draft.id}:${kind}`));
   const selectedReady = blankMap
     ? Boolean(draft?.junction && (draft.junction.documented || draft.junction.kind))
     : draft?.type === "fo-installation"
       ? readyJunction(draft.endpointA) && readyJunction(draft.endpointB)
       : readyJunction(draft?.junction ?? null);
   const routeReady = draft?.type !== "fo-installation" || (routeCoordinates.length >= 2 && Boolean(draft.cableType.trim()) && cableLengthValid);
-  const activityReady = Boolean(initialSummary?.assessment && draft?.type && selectedReady && routeReady && requiredPhotos && activityPhotos.length >= requiredPhotos);
+  const activityReady = Boolean(initialSummary?.assessment && draft?.type && selectedReady && routeReady && requiredPhotos && activityPhotos.length >= requiredPhotos && junctionPhotosReady);
 
   function beginActivity() {
     if (!initialSummary?.assessment) {
@@ -464,14 +475,14 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
     );
   }
 
-  async function addActivityPhotos(files: File[]) {
+  async function addActivityPhotos(files: File[], category: "photo" | JunctionPhotoKind = "photo") {
     if (!draft || !files.length) return;
     setUploading(true);
     setError("");
     try {
       const geo = await photoLocation();
       for (const file of files) {
-        const saved = await uploadProjectFile({ projectId: project.id, section: "intervention-execution", category: `${draft.id}:photo`, file, geo });
+        const saved = await uploadProjectFile({ projectId: project.id, section: "intervention-execution", category: `${draft.id}:${category}`, file, geo });
         setPhotos((current) => [...current, saved]);
       }
       onNotify(files.length === 1 ? "Fotografia activității a fost salvată cu GPS." : `${files.length} fotografii ale activității au fost salvate cu GPS.`);
@@ -498,9 +509,9 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
 
   async function cancelActivity() {
     if (!draft) return;
-    const pendingPhotos = photos.filter((photo) => photo.category === `${draft.id}:photo`);
+    const pendingPhotos = photos.filter((photo) => photo.category.startsWith(`${draft.id}:`));
     await Promise.allSettled(pendingPhotos.map((photo) => deleteProjectFile(photo.id)));
-    setPhotos((current) => current.filter((photo) => photo.category !== `${draft.id}:photo`));
+    setPhotos((current) => current.filter((photo) => !photo.category.startsWith(`${draft.id}:`)));
     setDraft(null);
     setMode("pan");
     setSearch("");
@@ -520,6 +531,10 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
     }
     if (!routeReady) {
       setError("Completează traseul, tipul cablului și lungimea instalată.");
+      return;
+    }
+    if (draft.type === "junction-installation" && !junctionPhotosReady) {
+      setError("Adaugă cele trei fotografii distincte ale joncțiunii: deschisă, închisă și pe amplasament.");
       return;
     }
     if (activityPhotos.length < requiredPhotos) {
@@ -618,7 +633,7 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
       const nextSummary: InterventionFieldSummary = nextActivities.length || materials.length
         ? { ...initialSummary, execution: { activities: nextActivities, materials, documentedAt: nextActivities.length ? Math.max(...nextActivities.map((item) => item.documentedAt)) : initialSummary?.execution?.documentedAt ?? 0 } }
         : { ...initialSummary, execution: undefined };
-      const attachedPhotos = photos.filter((photo) => photo.category === `${activity.id}:photo`);
+      const attachedPhotos = photos.filter((photo) => photo.category.startsWith(`${activity.id}:`));
       const removals = await Promise.allSettled(attachedPhotos.map((photo) => deleteProjectFile(photo.id)));
       const removedIds = new Set(attachedPhotos.filter((_, index) => removals[index].status === "fulfilled").map((photo) => photo.id));
       setPhotos((current) => current.filter((photo) => !removedIds.has(photo.id)));
@@ -753,11 +768,13 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
                   <p className="intervention-route-distance">Traseu estimat pe hartă: <strong>{Math.round(mappedDistance).toLocaleString("ro-RO")} m</strong></p>
                   <label className="intervention-damage-field"><span>Tip cablu FO <b>OBLIGATORIU</b></span><select value={draft.cableType} onChange={(event) => setDraft((current) => current ? { ...current, cableType: event.target.value } : current)}><option value="">Selectează tipul cablului</option>{[4, 12, 24, 48, 96].map((fibers) => <option key={fibers} value={`Cablu FO ${fibers}F`}>{fibers} fibre</option>)}</select></label>
                   <label className="intervention-damage-field"><span>Lungime instalată <b>METRI</b></span><input type="number" min="0.1" max="1000000" step="0.1" inputMode="decimal" value={draft.cableLength} onChange={(event) => setDraft((current) => current ? { ...current, cableLength: event.target.value } : current)} placeholder="ex. 125" /></label>
-                  <div className="fo-photo-rules intervention-photo-thresholds"><span className={cableLengthValid && cableLength <= 100 ? "active" : ""}><b>≤100 m</b><small>3 poze</small></span><span className={cableLength > 100 && cableLength <= 200 ? "active" : ""}><b>101–200 m</b><small>5 poze</small></span><span className={cableLength > 200 && cableLength <= 300 ? "active" : ""}><b>201–300 m</b><small>10 poze</small></span><span className={cableLength > 300 ? "active" : ""}><b>&gt;300 m</b><small>15 poze</small></span></div>
+                  {aerialCableInstallation && <div className="fo-photo-rules intervention-photo-thresholds"><span className={cableLengthValid && cableLength <= 100 ? "active" : ""}><b>≤100 m</b><small>3 poze</small></span><span className={cableLength > 100 && cableLength <= 200 ? "active" : ""}><b>101–200 m</b><small>5 poze</small></span><span className={cableLength > 200 ? "active" : ""}><b>&gt;200 m</b><small>minimum 10 poze</small></span></div>}
                 </> : junctionPanel("junction", draft.type === "diagnostics" ? "PUNCTUL ÎNDREPTĂRII CABLULUI" : draft.type === "splice-repair" ? "JONCȚIUNEA REFACERII SUDURII" : draft.type === "chamber-installation" ? "CAMERETA NOU INSTALATĂ" : "JONCȚIUNEA NOU INSTALATĂ", draft.junction)}
 
-                <div className="intervention-activity-photo-title"><strong>3. {draft.type === "diagnostics" ? "Fotografii îndreptare cablu la cald" : draft.type === "fo-installation" ? "Fotografii instalare FO" : draft.type === "chamber-installation" ? "Fotografii camereta (2 obligatorii)" : "Fotografii remediere"}</strong><span>{activityPhotos.length}/{requiredPhotos || "—"}</span></div>
-                <label className={`intervention-photo-upload intervention-activity-upload${uploading ? " is-uploading" : ""}${!requiredPhotos ? " is-disabled" : ""}`}><input type="file" accept="image/*" capture="environment" multiple disabled={uploading || !requiredPhotos} onChange={(event) => { const selected = Array.from(event.target.files ?? []); event.currentTarget.value = ""; void addActivityPhotos(selected); }} /><span className="intervention-upload-icon">⌖</span><strong>{uploading ? "Se încarcă fotografiile..." : "Adaugă fotografii GPS"}</strong><small>Data, ora și poziția sunt marcate pe imagine.</small></label>
+                <div className="intervention-activity-photo-title"><strong>3. {draft.type === "diagnostics" ? "Fotografii îndreptare cablu la cald" : draft.type === "fo-installation" ? "Fotografii instalare FO" : draft.type === "junction-installation" ? "Fotografii joncțiune (3 tipuri obligatorii)" : draft.type === "chamber-installation" ? "Fotografii camereta (2 obligatorii)" : "Fotografii remediere"}</strong><span>{activityPhotos.length}/{requiredPhotos || "—"}</span></div>
+                {draft.type === "junction-installation" ? <div className="intervention-material-source-lists">
+                  {junctionPhotoSlots.map(({ kind, label }) => { const present = activityPhotos.some((photo) => photo.category === `${draft.id}:${kind}`); return <label key={kind} className={`intervention-photo-upload intervention-activity-upload${uploading ? " is-uploading" : ""}`}><input type="file" accept="image/*" capture="environment" disabled={uploading || present} onChange={(event) => { const selected = Array.from(event.target.files ?? []); event.currentTarget.value = ""; void addActivityPhotos(selected.slice(0, 1), kind); }} /><span className="intervention-upload-icon">{present ? "✓" : "⌖"}</span><strong>{present ? `${label} · salvată` : label}</strong><small>O fotografie GPS obligatorie.</small></label>; })}
+                </div> : <label className={`intervention-photo-upload intervention-activity-upload${uploading ? " is-uploading" : ""}${!requiredPhotos ? " is-disabled" : ""}`}><input type="file" accept="image/*" capture="environment" multiple disabled={uploading || !requiredPhotos} onChange={(event) => { const selected = Array.from(event.target.files ?? []); event.currentTarget.value = ""; void addActivityPhotos(selected); }} /><span className="intervention-upload-icon">⌖</span><strong>{uploading ? "Se încarcă fotografiile..." : "Adaugă fotografii GPS"}</strong><small>Data, ora și poziția sunt marcate pe imagine.</small></label>}
 
                 {activityPhotos.length > 0 && <div className="intervention-activity-photo-list">{activityPhotos.map((photo) => <article key={photo.id}><span>✓</span><div><strong>{photo.name}</strong><small>⌖ {photo.geo} · {formatCapturedAt(photo.capturedAt)}</small></div><button type="button" onClick={() => void removeActivityPhoto(photo)} disabled={removingPhoto === photo.id}>{removingPhoto === photo.id ? "..." : "×"}</button></article>)}</div>}
                 {error && <p className="intervention-error" role="alert">{error}</p>}
