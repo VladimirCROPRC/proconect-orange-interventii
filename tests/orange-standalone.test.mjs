@@ -77,6 +77,9 @@ test("QAF records the coordinator who validates the intervention", async () => {
   const qaf = await source("app/orange-qaf.ts");
   assert.match(qaf, /validatedBy/);
   assert.match(qaf, /\["C77", documentation\.validatedBy\]/);
+  assert.match(qaf, /writeNumber\(mainXml, "C79", finalized\.day\)/);
+  assert.match(qaf, /writeNumber\(mainXml, "D79", finalized\.month\)/);
+  assert.match(qaf, /writeNumber\(mainXml, "E79", finalized\.year\)/);
 });
 
 test("QAF preserves the original workbook hyperlink formulas", async () => {
