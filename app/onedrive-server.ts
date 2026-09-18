@@ -208,6 +208,14 @@ function bucharestTimestamp(value: number) {
   return `${part("day")}.${part("month")}.${part("year")} ${part("hour")}:${part("minute")}:${part("second")}`;
 }
 
+function orangeClosingTimestamp(validatedAt: number | undefined, closingTime: string | undefined) {
+  if (!validatedAt) return "";
+  const timestamp = bucharestTimestamp(validatedAt);
+  return closingTime && /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(closingTime)
+    ? timestamp.replace(/\d{2}:\d{2}:\d{2}$/, `${closingTime}:00`)
+    : timestamp;
+}
+
 async function graphJson<T>(response: Response) {
   if (!response.ok) {
     const explanation = response.status === 423
@@ -237,7 +245,7 @@ export async function syncOrangeTicketWorkbook(projectId: string) {
   let intervention: {
     assessment?: { arrivedAt?: number; documentedAt?: number; incidentDescription?: string; damageLocation?: { lat?: number; lon?: number; placedAt?: number } };
     execution?: { remediationDescription?: string };
-    documentation?: { validatedAt?: number; validatedBy?: string; incidentDescription?: string; remediationDescription?: string };
+    documentation?: { validatedAt?: number; validatedBy?: string; closingTime?: string; incidentDescription?: string; remediationDescription?: string };
   } = {};
   try { intervention = project.documentation_json ? (JSON.parse(project.documentation_json).intervention ?? {}) : {}; } catch { intervention = {}; }
   const assessment = intervention.assessment;
@@ -285,7 +293,7 @@ export async function syncOrangeTicketWorkbook(projectId: string) {
   values[13] = project.technician;
   values[14] = assessment?.arrivedAt ? bucharestTimestamp(assessment.arrivedAt) : "";
   values[15] = damageLocation?.placedAt || assessment?.documentedAt ? bucharestTimestamp(damageLocation?.placedAt ?? assessment!.documentedAt!) : "";
-  values[16] = documentation?.validatedAt ? bucharestTimestamp(documentation.validatedAt) : "";
+  values[16] = orangeClosingTimestamp(documentation?.validatedAt, documentation?.closingTime);
   values[17] = project.cable_capacity;
   values[18] = incidentDescription;
   values[20] = "";
