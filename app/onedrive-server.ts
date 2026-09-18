@@ -208,6 +208,13 @@ function bucharestTimestamp(value: number) {
   return `${part("day")}.${part("month")}.${part("year")} ${part("hour")}:${part("minute")}:${part("second")}`;
 }
 
+function orangeRequestTimestamp(value: string | undefined, fallback: number) {
+  if (typeof value === "string" && !value.trim()) return "";
+  return value && /^\d{4}-\d{2}-\d{2}$/.test(value)
+    ? `${value.slice(8, 10)}.${value.slice(5, 7)}.${value.slice(0, 4)}`
+    : bucharestTimestamp(fallback);
+}
+
 function orangeClosingTimestamp(validatedAt: number | undefined, closingDate: string | undefined, closingTime: string | undefined) {
   if (!validatedAt) return "";
   const timestamp = bucharestTimestamp(validatedAt);
@@ -234,11 +241,11 @@ export async function syncOrangeTicketWorkbook(projectId: string) {
   const c = await connection();
   if (!c?.refresh_token) throw new Error("Conectează contul Microsoft 365 pentru registrul tichetelor Orange.");
   const project = await getRawDb().prepare(
-    "SELECT projects.id, projects.activity_type, projects.fo_section_name, projects.topology, projects.cable_capacity, projects.route_type, projects.orange_intervention_type, projects.sla, projects.departure_locality, projects.county, projects.requirements, projects.technician, projects.created_at, projects.status, project_field_documentation.content_json AS documentation_json FROM projects LEFT JOIN project_field_documentation ON project_field_documentation.project_id = projects.id WHERE projects.id = ? LIMIT 1",
+    "SELECT projects.id, projects.activity_type, projects.fo_section_name, projects.topology, projects.cable_capacity, projects.route_type, projects.orange_intervention_type, projects.sla, projects.departure_locality, projects.county, projects.requirements, projects.technician, projects.scheduled_label, projects.created_at, projects.status, project_field_documentation.content_json AS documentation_json FROM projects LEFT JOIN project_field_documentation ON project_field_documentation.project_id = projects.id WHERE projects.id = ? LIMIT 1",
   ).bind(projectId).first<{
     id: string; activity_type: string; fo_section_name: string; topology: string; cable_capacity: number;
     route_type: string; orange_intervention_type: string; sla: string; departure_locality: string; county: string;
-    requirements: string; technician: string; created_at: number; status: string; documentation_json?: string;
+    requirements: string; technician: string; scheduled_label: string; created_at: number; status: string; documentation_json?: string;
   }>();
   if (!project || project.activity_type !== "Intervenție Orange") return { configured: true, written: false };
 
@@ -288,7 +295,7 @@ export async function syncOrangeTicketWorkbook(projectId: string) {
   values[7] = project.topology;
   values[8] = project.status === "Finalizat" ? "Raport finalizat" : assessment ? "În lucru" : "Tichet generat";
   values[9] = project.sla;
-  values[11] = bucharestTimestamp(project.created_at);
+  values[11] = orangeRequestTimestamp(project.scheduled_label, project.created_at);
   values[12] = project.technician;
   values[13] = project.technician;
   values[14] = assessment?.arrivedAt ? bucharestTimestamp(assessment.arrivedAt) : "";
@@ -366,10 +373,12 @@ function shortOrangeTicket(projectId: string) {
 }
 
 async function orangeProjectDestination(token: string, rootId: string, projectId: string) {
-  const project = await getRawDb().prepare("SELECT departure_locality, county, created_at FROM projects WHERE id = ? LIMIT 1")
-    .bind(projectId).first<{ departure_locality?: string; county?: string; created_at?: number }>();
+  const project = await getRawDb().prepare("SELECT departure_locality, county, scheduled_label, created_at FROM projects WHERE id = ? LIMIT 1")
+    .bind(projectId).first<{ departure_locality?: string; county?: string; scheduled_label?: string; created_at?: number }>();
   if (!project) throw new Error("Tichetul Orange nu mai există.");
-  const date = new Date(project.created_at ?? Date.now());
+  const date = project.scheduled_label && /^\d{4}-\d{2}-\d{2}$/.test(project.scheduled_label)
+    ? new Date(`${project.scheduled_label}T12:00:00Z`)
+    : new Date(project.created_at ?? Date.now());
   const year = Number(new Intl.DateTimeFormat("en", { timeZone: "Europe/Bucharest", year: "numeric" }).format(date));
   const month = Number(new Intl.DateTimeFormat("en", { timeZone: "Europe/Bucharest", month: "2-digit" }).format(date));
   const day = new Intl.DateTimeFormat("en", { timeZone: "Europe/Bucharest", day: "2-digit" }).format(date);
