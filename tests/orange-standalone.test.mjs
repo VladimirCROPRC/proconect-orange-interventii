@@ -79,8 +79,8 @@ test("QAF records the coordinator who validates the intervention", async () => {
   assert.match(qaf, /\["C77", documentation\.validatedBy\]/);
 });
 
-test("QAF hyperlinks preserve the worksheet XML element order", async () => {
+test("QAF preserves the original workbook hyperlink formulas", async () => {
   const qaf = await source("app/orange-qaf.ts");
-  assert.match(qaf, /replace\("<\/dataValidations>", `<\/dataValidations>\$\{hyperlinks\}`\)/);
-  assert.doesNotMatch(qaf, /replace\("<\/mergeCells>", `<\/mergeCells>\$\{hyperlinks\}`\)/);
+  assert.doesNotMatch(qaf, /mainRelationships|rIdMap|mapLinks|addMapLink/);
+  assert.doesNotMatch(qaf, /writeText\(mainXml, "G34"/);
 });
