@@ -18,7 +18,7 @@ type MaterialSelection = { source?: string; description?: string; unit?: string;
 type ParsedProject = ProjectRow & {
   closingDate: string;
   requestedDate: string;
-  remediation: string;
+  validatedRemediation: string;
   participants: string[];
   services: ServiceSelection[];
   materials: MaterialSelection[];
@@ -30,8 +30,8 @@ type ReportLine = {
   locality: string;
   requestedDate: string;
   closingDate: string;
-  remediation: string;
-  description: string;
+  workDescription: string;
+  boqItem: string;
   unit: string;
   quantity: number;
   price: number;
@@ -214,7 +214,7 @@ function parseProject(row: ProjectRow): ParsedProject | null {
       ...row,
       closingDate,
       requestedDate: /^\d{4}-\d{2}-\d{2}/.test(row.scheduled_label) ? row.scheduled_label.slice(0, 10) : "",
-      remediation: String(documentation.remediationDescription ?? intervention.execution?.remediationDescription ?? "").trim(),
+      validatedRemediation: String(documentation.remediationDescription ?? "").trim(),
       participants: Array.from(new Set(participantSource.map((name: unknown) => String(name).trim()).filter(Boolean))),
       services: Array.isArray(documentation.services) ? documentation.services : [],
       materials: Array.isArray(intervention.execution?.materials) ? intervention.execution.materials : [],
@@ -270,13 +270,13 @@ function linesFor(projects: ParsedProject[], catalog: ReturnType<typeof catalogF
       locality: project.departure_locality,
       requestedDate: project.requestedDate,
       closingDate: project.closingDate,
-      remediation: project.remediation,
+      workDescription: project.validatedRemediation,
     };
     for (const service of project.services) {
       const quantity = Number(service.quantity);
       if (!service.code || !Number.isFinite(quantity) || quantity <= 0) continue;
       const item = catalog.items.get(serviceRows[service.code]);
-      lines.push({ ...common, description: item?.description ?? service.code, unit: item?.unit ?? "", quantity, price: item?.price ?? 0, observation: "" });
+      lines.push({ ...common, boqItem: service.code, unit: item?.unit ?? "", quantity, price: item?.price ?? 0, observation: "" });
     }
     for (const material of project.materials) {
       const quantity = Number(material.quantity);
@@ -284,7 +284,7 @@ function linesFor(projects: ParsedProject[], catalog: ReturnType<typeof catalogF
       const item = catalog.byDescription.get(normalize(material.description));
       lines.push({
         ...common,
-        description: item?.description ?? material.description,
+        boqItem: item?.description ?? material.description,
         unit: item?.unit || String(material.unit ?? ""),
         quantity,
         price: item?.price ?? 0,
@@ -306,7 +306,7 @@ function renderDataRow(line: ReportLine, row: number) {
   return `<row r="${row}" spans="1:12" s="70" customFormat="1" ht="15" customHeight="1">` +
     textCell(`A${row}`, line.ticket, 44) + textCell(`B${row}`, line.county, 43) + textCell(`C${row}`, line.locality, 93) +
     numberCell(`D${row}`, excelSerial(line.requestedDate), 46) + numberCell(`E${row}`, excelSerial(line.closingDate), 46) +
-    textCell(`F${row}`, line.remediation, 86) + textCell(`G${row}`, line.description, 76) + textCell(`H${row}`, line.unit, 45) +
+    textCell(`F${row}`, line.workDescription, 86) + textCell(`G${row}`, line.boqItem, 76) + textCell(`H${row}`, line.unit, 45) +
     numberCell(`I${row}`, line.quantity, 80) + numberCell(`J${row}`, line.price, 47) + formulaCell(`K${row}`, `I${row}*J${row}`, total, 48) +
     textCell(`L${row}`, line.observation, 49) + `</row>`;
 }

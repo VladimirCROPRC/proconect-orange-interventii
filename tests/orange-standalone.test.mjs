@@ -192,6 +192,11 @@ test("monthly Anexa 3 reports are grouped by technician and contractor", async (
   assert.match(reports, /subjectsFor\("technician"/);
   assert.match(reports, /subjectsFor\("contractor"/);
   assert.match(reports, /Material custodie/);
+  assert.match(reports, /validatedRemediation: String\(documentation\.remediationDescription \?\? ""\)\.trim\(\)/);
+  assert.match(reports, /boqItem: service\.code/);
+  assert.match(reports, /textCell\(`F\$\{row\}`, line\.workDescription/);
+  assert.match(reports, /textCell\(`G\$\{row\}`, line\.boqItem/);
+  assert.doesNotMatch(reports, /documentation\.remediationDescription \?\? intervention\.execution/);
   assert.match(reports, /Anexa-3-Contractor\.xlsx/);
   assert.match(route, /buildAllMonthlyReports/);
   assert.match(accounts, /updateAccountContractor/);
