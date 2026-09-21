@@ -21,9 +21,10 @@ test('OneDrive API restricts actions to an authenticated Admin and matching orig
     drainOneDrive: async () => { operations++; },
     retryOneDrive: async () => { operations++; },
     setBackupMode: async () => { operations++; },
+    syncOneDriveProject: async (projectId, restart) => { operations++; return { pending: 0, error: '', projectId, restart }; },
   };
   const code = (await source('app/api/onedrive/route.ts'))
-    .replace(/^import .*onedrive-server";$/m, 'const { beginOneDrive, disconnectOneDrive, drainOneDrive, oneDriveSameOrigin, oneDriveStatus, retryOneDrive, setBackupMode } = globalThis.__odApi;')
+    .replace(/^import .*onedrive-server";$/m, 'const { beginOneDrive, disconnectOneDrive, drainOneDrive, oneDriveSameOrigin, oneDriveStatus, retryOneDrive, setBackupMode, syncOneDriveProject } = globalThis.__odApi;')
     .replace(/^import .*server-auth";$/m, 'const { currentSession } = globalThis.__odApi;');
   const api = await import(moduleUrl(code));
   const request = (origin = 'https://example.test') => new Request('https://example.test/api/onedrive', { method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'authorize' }) });
@@ -34,15 +35,22 @@ test('OneDrive API restricts actions to an authenticated Admin and matching orig
       assert.equal((await api.POST(request())).status, 403);
       assert.equal((await api.GET(new Request('https://example.test/api/onedrive'))).status, 403);
     }
+    for (const role of ['Manager', 'Coordonator']) {
+      session = { sessionId: 'session', account: { role, passwordResetRequired: false } };
+      const targeted = await api.POST(new Request('https://example.test/api/onedrive', { method: 'POST', headers: { Origin: 'https://example.test', 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'sync-project', projectId: 'IMO1', restart: true }) }));
+      assert.equal(targeted.status, 200);
+    }
+    session = { sessionId: 'session', account: { role: 'Tehnician', passwordResetRequired: false } };
+    assert.equal((await api.POST(new Request('https://example.test/api/onedrive', { method: 'POST', headers: { Origin: 'https://example.test', 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'sync-project', projectId: 'IMO1' }) }))).status, 403);
     session.account = { role: 'Admin', passwordResetRequired: true };
     assert.equal((await api.POST(request())).status, 401);
     session.account.passwordResetRequired = false;
     assert.equal((await api.POST(request('https://evil.test'))).status, 403);
-    assert.equal(operations, 0);
+    assert.equal(operations, 2);
     const allowed = await api.POST(request());
     assert.equal(allowed.status, 200);
     assert.equal(allowed.headers.get('Cache-Control'), 'no-store');
-    assert.equal(operations, 1);
+    assert.equal(operations, 3);
   } finally { delete globalThis.__odApi; }
 });
 
@@ -53,6 +61,9 @@ test('provider selection, fixed origin, unique safe names, and retry delays', as
   assert.equal(core.usesOneDrive('google'), false);
   assert.equal(core.fixedOrigin('https://example.test/'), 'https://example.test');
   for (const origin of ['http://example.test', 'https://user:password@example.test', 'https://example.test/path']) assert.throws(() => core.fixedOrigin(origin));
+  assert.deepEqual(core.workbookTicketRow([['IMO1'], ['FITT2'], [''], ['IMO3']], 'FITT2'), { existingIndex: 1, targetIndex: 1 });
+  assert.deepEqual(core.workbookTicketRow([['IMO1'], ['FITT2'], [''], ['IMO3']], 'NEW4'), { existingIndex: -1, targetIndex: 2 });
+  assert.deepEqual(core.workbookTicketRow([['IMO1'], ['FITT2']], 'NEW4'), { existingIndex: -1, targetIndex: -1 });
   const a = await core.safeName('a/b:test?.jpg', 'file-a');
   assert.doesNotMatch(a, /[\\/:?]/);
   assert.match(a, /\.jpg$/);
@@ -88,6 +99,7 @@ test('OneDrive server with isolated SQLite, fake Microsoft responses and fake R2
     buildSpliceSheetXlsx: async () => new Uint8Array(),
     buildMaterialSheetPdf: async () => new Uint8Array(),
     buildOrangeQafXlsx: async () => new Uint8Array(),
+    buildOrangeKmz: async () => new Uint8Array(),
   };
   let text = await source('app/onedrive-server.ts');
   text = text.replace('import { env } from "cloudflare:workers";', 'const { env } = globalThis.__od;')
@@ -97,6 +109,7 @@ test('OneDrive server with isolated SQLite, fake Microsoft responses and fake R2
     .replace('import { buildSpliceSheetXlsx } from "./splice-xlsx";', 'const { buildSpliceSheetXlsx } = globalThis.__od;')
     .replace('import { buildMaterialSheetPdf } from "./material-pdf";', 'const { buildMaterialSheetPdf } = globalThis.__od;')
     .replace('import { buildOrangeQafXlsx } from "./orange-qaf";', 'const { buildOrangeQafXlsx } = globalThis.__od;')
+    .replace('import { buildOrangeKmz } from "./orange-kmz";', 'const { buildOrangeKmz } = globalThis.__od;')
     .replace('"./onedrive-core"', JSON.stringify(coreUrl));
   const server = await import(moduleUrl(text));
   const originalFetch = globalThis.fetch;

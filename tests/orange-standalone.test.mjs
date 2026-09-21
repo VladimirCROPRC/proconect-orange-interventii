@@ -151,6 +151,8 @@ test("Orange ticket creation only requires the ticket number and uses the manual
   assert.match(qaf, /time: match\[4\] && match\[5\] \? `\$\{match\[4\]\}:\$\{match\[5\]\}` : ""/);
   assert.match(centralizer, /requestDateTimestamp\(project\.scheduled_label/);
   assert.match(oneDrive, /orangeRequestTimestamp\(project\.scheduled_label/);
+  assert.match(oneDrive, /workbookTicketRow\(range\.values \?\? \[\], project\.id\)/);
+  assert.match(oneDrive, /itemAt\(index=\$\{targetIndex\}\)/);
   assert.match(backup, /export async function syncProjectIfConnected/);
   assert.match(backup, /usesOneDrive\(mode\) \? syncOrangeTicketWorkbook\(id\)/);
 });
@@ -204,4 +206,17 @@ test("monthly Anexa 3 reports are grouped by technician and contractor", async (
   assert.match(route, /buildAllMonthlyReports/);
   assert.match(accounts, /updateAccountContractor/);
   assert.match(reports, /CREATE TABLE IF NOT EXISTS technician_contractors/);
+});
+
+test("a manager can synchronize one Orange ticket without starting the bulk queue", async () => {
+  const page = await source("app/page.tsx");
+  const route = await source("app/api/onedrive/route.ts");
+  const server = await source("app/onedrive-server.ts");
+  assert.match(page, /action: "sync-project", projectId, restart/);
+  assert.match(page, /project\.activityType === "Intervenție Orange"/);
+  assert.match(page, /Se sincronizează…/);
+  assert.match(route, /\["Admin", "Manager", "Coordonator"\]/);
+  assert.match(route, /syncOneDriveProject\(body\.projectId/);
+  assert.match(server, /export async function syncOneDriveProject/);
+  assert.match(server, /projectJobFilter/);
 });

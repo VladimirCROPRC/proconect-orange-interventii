@@ -1,10 +1,15 @@
-import { beginOneDrive, disconnectOneDrive, drainOneDrive, oneDriveSameOrigin, oneDriveStatus, retryOneDrive, setBackupMode } from "../../onedrive-server";
+import { beginOneDrive, disconnectOneDrive, drainOneDrive, oneDriveSameOrigin, oneDriveStatus, retryOneDrive, setBackupMode, syncOneDriveProject } from "../../onedrive-server";
 import { currentSession } from "../../server-auth";
 export const dynamic = "force-dynamic";
 async function authorized(request: Request) {
   const session = await currentSession(request);
   if (!session || session.account.passwordResetRequired) return { response: Response.json({ error: "Autentificare necesară." }, { status: 401 }) };
   if (session.account.role !== "Admin") return { response: Response.json({ error: "Acces rezervat administratorului." }, { status: 403 }) };
+  return { session };
+}
+async function authenticated(request: Request) {
+  const session = await currentSession(request);
+  if (!session || session.account.passwordResetRequired) return { response: Response.json({ error: "Autentificare necesară." }, { status: 401 }) };
   return { session };
 }
 export async function GET(request: Request) {
@@ -15,9 +20,15 @@ export async function GET(request: Request) {
 }
 export async function POST(request: Request) {
   try {
-    const auth = await authorized(request); if (auth.response) return auth.response;
+    const auth = await authenticated(request); if (auth.response) return auth.response;
     if (!oneDriveSameOrigin(request)) return Response.json({ error: "Origine neautorizată sau PROCONECT_APP_URL neconfigurat." }, { status: 403 });
-    const body = await request.json() as { action?: string; mode?: unknown };
+    const body = await request.json() as { action?: string; mode?: unknown; projectId?: unknown; restart?: unknown };
+    if (body.action === "sync-project") {
+      if (!["Admin", "Manager", "Coordonator"].includes(auth.session!.account.role)) return Response.json({ error: "Acces rezervat coordonatorilor și managerilor." }, { status: 403 });
+      const projectSync = await syncOneDriveProject(body.projectId, body.restart === true);
+      return Response.json({ projectSync }, { headers: { "Cache-Control": "no-store" } });
+    }
+    if (auth.session!.account.role !== "Admin") return Response.json({ error: "Acces rezervat administratorului." }, { status: 403 });
     switch (body.action) {
       case "authorize": return Response.json({ authorizationUrl: await beginOneDrive(auth.session!.sessionId) }, { headers: { "Cache-Control": "no-store" } });
       case "mode": await setBackupMode(body.mode); break;

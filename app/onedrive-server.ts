@@ -6,7 +6,7 @@ import { buildSpliceSheetXlsx } from "./splice-xlsx";
 import { buildMaterialSheetPdf } from "./material-pdf";
 import { buildOrangeQafXlsx } from "./orange-qaf";
 import { buildOrangeKmz } from "./orange-kmz";
-import { base64url, decode64, fixedOrigin, retryDelay, safeName, usesOneDrive, validMode, type BackupMode } from "./onedrive-core";
+import { base64url, decode64, fixedOrigin, retryDelay, safeName, usesOneDrive, validMode, workbookTicketRow, type BackupMode } from "./onedrive-core";
 
 type Environment = { PROCONECT_APP_URL?: string; ONEDRIVE_CLIENT_ID?: string; ONEDRIVE_TENANT_ID?: string; ONEDRIVE_CLIENT_SECRET?: string; ONEDRIVE_ENCRYPTION_KEY?: string; ORANGE_TICKETS_WORKBOOK_URL?: string };
 type Connection = { mode: BackupMode; generation: string; access_token: string; refresh_token: string; expires_at: number; drive_id: string; root_id: string; root_url: string; account: string; owner_id: string; lease: string; lease_until: number };
@@ -175,6 +175,22 @@ export async function retryOneDrive() {
     getRawDb().prepare("UPDATE onedrive_jobs SET revision = revision + 1, attempts = 0, next_at = 0, last_error = '' WHERE (kind = 'file' AND EXISTS (SELECT 1 FROM project_files WHERE project_files.id = onedrive_jobs.item_id)) OR (kind = 'project' AND EXISTS (SELECT 1 FROM projects WHERE projects.id = onedrive_jobs.item_id))"),
   ]);
 }
+
+const projectJobFilter = "((kind = 'project' AND item_id = ?) OR (kind = 'file' AND EXISTS (SELECT 1 FROM project_files WHERE project_files.id = onedrive_jobs.item_id AND project_files.project_id = ?)))";
+
+async function projectSyncState(projectId: string) {
+  const row = await getRawDb().prepare(`SELECT SUM(CASE WHEN revision > done_revision THEN 1 ELSE 0 END) AS pending FROM onedrive_jobs WHERE ${projectJobFilter}`)
+    .bind(projectId, projectId).first<{ pending?: number }>();
+  const error = await getRawDb().prepare(`SELECT last_error FROM onedrive_jobs WHERE ${projectJobFilter} AND last_error != '' ORDER BY CASE WHEN kind = 'project' THEN 0 ELSE 1 END, id LIMIT 1`)
+    .bind(projectId, projectId).first<{ last_error?: string }>();
+  return { pending: Number(row?.pending ?? 0), error: error?.last_error ?? "" };
+}
+
+async function queueOneDriveProject(projectId: string) {
+  await queueOneDrive("project", projectId);
+  const files = await getRawDb().prepare("SELECT id FROM project_files WHERE project_id = ? ORDER BY id").bind(projectId).all<{ id: string }>();
+  for (const file of files.results ?? []) await queueOneDrive("file", file.id);
+}
 export async function oneDriveStatus() {
   const configured = oneDriveConfigured();
   if (!configured) return { configured: false, connected: false, mode: "google", account: "", rootUrl: "", synced: 0, pending: 0, errors: [] };
@@ -277,9 +293,10 @@ export async function syncOrangeTicketWorkbook(projectId: string) {
   const workbook = `/drives/${encodeURIComponent(driveId)}/items/${encodeURIComponent(itemId)}/workbook`;
   const ticketColumn = await graph(token, `${workbook}/tables/Table1/columns/${encodeURIComponent("Ticket ID")}/dataBodyRange?$select=values`);
   let existingIndex = -1;
+  let targetIndex = -1;
   if (ticketColumn.ok) {
     const range = await ticketColumn.json() as WorkbookRange;
-    existingIndex = (range.values ?? []).findIndex((row) => String(row[0] ?? "").trim().toUpperCase() === project.id.toUpperCase());
+    ({ existingIndex, targetIndex } = workbookTicketRow(range.values ?? [], project.id));
   } else if (ticketColumn.status !== 404) {
     await graphJson(ticketColumn);
   }
@@ -287,8 +304,8 @@ export async function syncOrangeTicketWorkbook(projectId: string) {
   // Table1 in the existing ENO3 centralizer spans A:AE (31 columns).
   // Microsoft Graph rejects rows whose value count differs from the table width.
   let values = Array.from({ length: 31 }, () => "") as Array<string | number>;
-  if (existingIndex >= 0) {
-    const existingRow = await graphJson<WorkbookRange>(await graph(token, `${workbook}/tables/Table1/rows/itemAt(index=${existingIndex})/range?$select=values`));
+  if (targetIndex >= 0) {
+    const existingRow = await graphJson<WorkbookRange>(await graph(token, `${workbook}/tables/Table1/rows/itemAt(index=${targetIndex})/range?$select=values`));
     if (existingRow.values?.[0]?.length === 31) values = existingRow.values[0].map((value) => typeof value === "number" ? value : String(value ?? ""));
   }
   values[1] = project.fo_section_name;
@@ -312,11 +329,11 @@ export async function syncOrangeTicketWorkbook(projectId: string) {
   values[22] = typeof damageLocation?.lat === "number" && typeof damageLocation?.lon === "number" ? `${damageLocation.lat.toFixed(6)}, ${damageLocation.lon.toFixed(6)}` : "";
   values[23] = "";
 
-  const rowPath = existingIndex >= 0 ? `${workbook}/tables/Table1/rows/itemAt(index=${existingIndex})/range` : `${workbook}/tables/Table1/rows/add`;
+  const rowPath = targetIndex >= 0 ? `${workbook}/tables/Table1/rows/itemAt(index=${targetIndex})/range` : `${workbook}/tables/Table1/rows/add`;
   await graphJson(await graph(token, rowPath, {
-    method: existingIndex >= 0 ? "PATCH" : "POST",
+    method: targetIndex >= 0 ? "PATCH" : "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(existingIndex >= 0 ? { values: [values] } : { index: null, values: [values] }),
+    body: JSON.stringify(targetIndex >= 0 ? { values: [values] } : { index: null, values: [values] }),
   }));
   return { configured: true, written: existingIndex < 0, updated: existingIndex >= 0 };
 }
@@ -587,4 +604,38 @@ export async function drainOneDrive() {
   } finally {
     await getRawDb().prepare("UPDATE onedrive_connection SET lease = '', lease_until = 0 WHERE id = ? AND lease = ?").bind(settingsId, lease).run();
   }
+}
+
+export async function syncOneDriveProject(projectIdInput: unknown, restart = false) {
+  const projectId = typeof projectIdInput === "string" ? projectIdInput.trim() : "";
+  if (!projectId || projectId.length > 160) throw new Error("Tichet invalid.");
+  const project = await getRawDb().prepare("SELECT activity_type FROM projects WHERE id = ? LIMIT 1").bind(projectId).first<{ activity_type?: string }>();
+  if (!project || project.activity_type !== "Intervenție Orange") throw new Error("Tichetul Orange nu există.");
+  const existing = await connection();
+  if (!existing?.refresh_token || !usesOneDrive(existing.mode)) throw new Error("Conectează OneDrive și activează destinația Microsoft înainte de sincronizare.");
+  if (restart) await queueOneDriveProject(projectId);
+
+  const lease = crypto.randomUUID();
+  const c = await getRawDb().prepare("UPDATE onedrive_connection SET lease = ?, lease_until = ? WHERE id = ? AND mode IN ('onedrive', 'both') AND refresh_token != '' AND lease_until < ? RETURNING *")
+    .bind(lease, Date.now() + 120_000, settingsId, Date.now()).first<Connection>();
+  if (!c) return { ...(await projectSyncState(projectId)), busy: true };
+  try {
+    const job = await getRawDb().prepare(`SELECT * FROM onedrive_jobs WHERE revision > done_revision AND next_at <= ? AND ${projectJobFilter} ORDER BY CASE WHEN kind = 'project' THEN 0 ELSE 1 END, id LIMIT 1`)
+      .bind(Date.now(), projectId, projectId).first<Job>();
+    if (job) {
+      try {
+        await uploadJob(c, job);
+        await getRawDb().prepare("UPDATE onedrive_jobs SET done_revision = ?, attempts = 0, last_error = '', next_at = 0 WHERE id = ? AND EXISTS (SELECT 1 FROM onedrive_connection WHERE generation = ? AND lease = ?)")
+          .bind(job.revision, job.id, c.generation, lease).run();
+      } catch (error) {
+        const message = error instanceof RemoteFailure ? error.message : "Sincronizarea tichetului nu a reușit. Verifică conexiunea și fișierele sursă, apoi reîncearcă.";
+        const delay = Math.max(retryDelay(job.attempts), error instanceof RemoteFailure ? error.delay : 0);
+        await getRawDb().prepare("UPDATE onedrive_jobs SET attempts = attempts + 1, next_at = ?, last_error = ? WHERE id = ? AND revision = ? AND EXISTS (SELECT 1 FROM onedrive_connection WHERE generation = ? AND lease = ?)")
+          .bind(Date.now() + delay, message, job.id, job.revision, c.generation, lease).run();
+      }
+    }
+  } finally {
+    await getRawDb().prepare("UPDATE onedrive_connection SET lease = '', lease_until = 0 WHERE id = ? AND lease = ?").bind(settingsId, lease).run();
+  }
+  return { ...(await projectSyncState(projectId)), busy: false };
 }

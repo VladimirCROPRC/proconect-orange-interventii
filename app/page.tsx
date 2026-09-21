@@ -193,6 +193,7 @@ export default function Home() {
   const [filter, setFilter] = useState("Toate statusurile");
   const [selected, setSelected] = useState<Project | null>(null);
   const [toast, setToast] = useState("");
+  const [syncingProjectId, setSyncingProjectId] = useState("");
   const [ipwoName, setIpwoName] = useState("");
   const [spliceName, setSpliceName] = useState("");
   const [ipwoFile, setIpwoFile] = useState<File | null>(null);
@@ -574,6 +575,36 @@ export default function Home() {
   function showToast(message: string) {
     setToast(message);
     window.setTimeout(() => setToast(""), 3600);
+  }
+
+  async function syncOneTicket(projectId: string) {
+    if (syncingProjectId) return;
+    setSyncingProjectId(projectId);
+    try {
+      let restart = true;
+      for (let attempt = 0; attempt < 500; attempt += 1) {
+        const response = await fetch("/api/onedrive", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "sync-project", projectId, restart }),
+        });
+        const payload = await response.json() as { projectSync?: { pending?: number; error?: string; busy?: boolean }; error?: string };
+        if (!response.ok || !payload.projectSync) throw new Error(payload.error || "Sincronizarea nu a putut fi pornită.");
+        if (payload.projectSync.error) throw new Error(payload.projectSync.error);
+        if (!payload.projectSync.pending) {
+          showToast(`${projectId} a fost sincronizat în OneDrive și Centralizator.`);
+          return;
+        }
+        restart = false;
+        await new Promise((resolve) => window.setTimeout(resolve, payload.projectSync.busy ? 1_500 : 250));
+      }
+      throw new Error("Sincronizarea durează prea mult. Reîncearcă peste câteva momente.");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Sincronizarea tichetului nu a reușit.");
+    } finally {
+      setSyncingProjectId("");
+    }
   }
 
   function exportTicketsWithoutOrder() {
@@ -1404,7 +1435,7 @@ export default function Home() {
                         <td><div className="technician"><span className="avatar">{initials(project.technician)}</span><strong>{project.technician}</strong></div></td>
                         <td><span className={statusClass[project.status]}><i />{project.status}</span></td>
                         <td><strong>{project.date}</strong></td>
-                        <td>{canManageDocuments && <div style={{ display: "flex", alignItems: "center", gap: "4px" }}><button className="more" aria-label={`Editează ${project.id}`} title={`Editează ${project.id}`} onClick={(event) => { event.stopPropagation(); openProjectEditor(project); }}>Editează</button><button className="more" style={{ color: "#b42336" }} aria-label={`Șterge ${project.id}`} title={`Șterge ${project.id}`} onClick={(event) => { event.stopPropagation(); openProjectDeletion(project); }}>Șterge</button></div>}</td>
+                        <td>{canManageDocuments && <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>{project.activityType === "Intervenție Orange" && <button className="more" disabled={Boolean(syncingProjectId)} aria-label={`Sincronizează ${project.id}`} title={`Sincronizează ${project.id}`} onClick={(event) => { event.stopPropagation(); void syncOneTicket(project.id); }}>{syncingProjectId === project.id ? "Se sincronizează…" : "Sincronizează"}</button>}<button className="more" aria-label={`Editează ${project.id}`} title={`Editează ${project.id}`} onClick={(event) => { event.stopPropagation(); openProjectEditor(project); }}>Editează</button><button className="more" style={{ color: "#b42336" }} aria-label={`Șterge ${project.id}`} title={`Șterge ${project.id}`} onClick={(event) => { event.stopPropagation(); openProjectDeletion(project); }}>Șterge</button></div>}</td>
                       </tr>
                     ))}
                   </tbody>

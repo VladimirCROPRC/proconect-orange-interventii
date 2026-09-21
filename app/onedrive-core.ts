@@ -28,3 +28,11 @@ export function fixedOrigin(value: string) {
   if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash || url.pathname !== "/") throw new Error("PROCONECT_APP_URL trebuie să fie originea HTTPS a aplicației.");
   return url.origin;
 }
+
+export function workbookTicketRow(rows: unknown[][], ticketId: string) {
+  const normalizedTicket = ticketId.trim().toUpperCase();
+  const existingIndex = rows.findIndex((row) => String(row[0] ?? "").trim().toUpperCase() === normalizedTicket);
+  if (existingIndex >= 0) return { existingIndex, targetIndex: existingIndex };
+  const emptyIndex = rows.findIndex((row) => !String(row[0] ?? "").trim());
+  return { existingIndex: -1, targetIndex: emptyIndex };
+}
