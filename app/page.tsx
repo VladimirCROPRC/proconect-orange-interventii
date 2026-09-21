@@ -9,6 +9,7 @@ import { ProjectDocumentsSection } from "./project-documents";
 import { GoogleDriveSettings, type GoogleDriveStatus } from "./google-drive-settings";
 import { OneDriveSettings } from "./onedrive-settings";
 import { MaterialInventory } from "./material-inventory";
+import { MonthlyReports } from "./monthly-reports";
 import { TechnicianMap } from "./technician-map";
 import { fetchProjectFiles, formatCapturedAt, uploadProjectFile } from "./client-storage";
 import { initialCpeCatalog, type CpeCatalogItem, type ProjectActivityType, type ProjectRecord } from "./project-data";
@@ -18,7 +19,7 @@ import { NoInterventionControl } from "./no-intervention-control";
 import { buildTicketsWithoutOrderXlsx } from "./ticket-report-xlsx";
 import { orangeCounties } from "./orange-counties";
 
-type View = "projects" | "interventions" | "orange-interventions" | "surveys" | "map" | "intervention-workspace" | "intervention-execution" | "intervention-documentation" | "survey-workspace" | "team" | "cpe" | "drive" | "materials" | "documents" | "client" | "route" | "splices" | "site";
+type View = "projects" | "interventions" | "orange-interventions" | "surveys" | "map" | "intervention-workspace" | "intervention-execution" | "intervention-documentation" | "survey-workspace" | "team" | "cpe" | "drive" | "materials" | "reports" | "documents" | "client" | "route" | "splices" | "site";
 type ActivityListView = "projects" | "interventions" | "orange-interventions" | "surveys";
 type Modal = "project" | "edit-project" | "delete-project" | "account" | "cpe" | "edit-cpe" | null;
 type ServiceType = "Internet" | "VPN" | "Internet+OL" | "OL";
@@ -79,6 +80,7 @@ type Account = {
   username: string;
   name: string;
   role: "Admin" | "Manager" | "Coordonator" | "Tehnician";
+  contractor: string;
   active: boolean;
   jobs: number;
 };
@@ -86,8 +88,8 @@ type Account = {
 type SignedInAccount = Account & { passwordResetRequired: boolean };
 
 const initialAccounts: Account[] = [
-  { username: "vladimir.carlan", name: "Vladimir", role: "Admin", active: true, jobs: 0 },
-  { username: "vlad", name: "Vlad", role: "Tehnician", active: true, jobs: 4 },
+  { username: "vladimir.carlan", name: "Vladimir", role: "Admin", contractor: "", active: true, jobs: 0 },
+  { username: "vlad", name: "Vlad", role: "Tehnician", contractor: "", active: true, jobs: 4 },
 ];
 
 const emptyProject: Project = {
@@ -863,6 +865,7 @@ export default function Home() {
           name: String(form.get("name")),
           role: String(form.get("role")),
           password: String(form.get("password")),
+          contractor: String(form.get("contractor") || ""),
         }),
       });
       const payload = (await response.json()) as { account?: Account; error?: string };
@@ -872,6 +875,23 @@ export default function Home() {
       showToast(`Contul ${username} a fost creat.`);
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Contul nu a putut fi creat.");
+    }
+  }
+
+  async function saveTechnicianContractor(username: string, contractor: string) {
+    try {
+      const response = await fetch("/api/accounts", {
+        method: "PATCH",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, contractor }),
+      });
+      const payload = (await response.json()) as { contractor?: string; error?: string };
+      if (!response.ok || payload.contractor === undefined) throw new Error(payload.error || "Contractorul nu a putut fi salvat.");
+      setAccounts((current) => current.map((account) => account.username === username ? { ...account, contractor: payload.contractor! } : account));
+      showToast(payload.contractor ? `Contractorul ${payload.contractor} a fost asociat tehnicianului.` : "Asocierea cu contractorul a fost eliminată.");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Contractorul nu a putut fi salvat.");
     }
   }
 
@@ -1137,7 +1157,7 @@ export default function Home() {
       showToast("Harta dedicată este disponibilă conturilor de tehnician.");
       return;
     }
-    if ((next === "documents" || next === "intervention-documentation" || next === "team" || next === "cpe" || next === "drive") && !canManageDocuments) {
+    if ((next === "documents" || next === "intervention-documentation" || next === "team" || next === "cpe" || next === "drive" || next === "materials" || next === "reports") && !canManageDocuments) {
       showToast("Nu ai permisiunea de a accesa această secțiune administrativă.");
       return;
     }
@@ -1257,6 +1277,9 @@ export default function Home() {
           {canManageDocuments && <button className={view === "materials" ? "active" : ""} onClick={() => goTo("materials")}>
             <span className="nav-symbol">M</span> Materiale
           </button>}
+          {canManageDocuments && <button className={view === "reports" ? "active" : ""} onClick={() => goTo("reports")}>
+            <span className="nav-symbol">R</span> Rapoarte
+          </button>}
           {canManageDocuments && <button className={view === "drive" ? "active" : ""} onClick={() => goTo("drive")}>
             <span className="nav-symbol">AD</span> Administrare
           </button>}
@@ -1286,7 +1309,7 @@ export default function Home() {
             <img className="proconect-logo mobile-proconect-logo" src={proconectLogoUrl} alt="PRO CONECT" />
             <strong>ORANGE</strong>
           </button>
-          <div className="breadcrumb"><span>{isProjectView ? `${activitySections[listViewForActivity(activeProject.activityType)].title} · ${activeProject.id}` : isActivityListView ? "Activități" : "Management"}</span><b>/</b><strong>{view === "projects" ? "Instalări" : view === "interventions" ? "Intervenții" : view === "orange-interventions" ? "Intervenții Orange" : view === "surveys" ? "Survey" : view === "intervention-workspace" ? "Constatare" : view === "intervention-execution" ? "Execuție" : view === "intervention-documentation" ? "Documentare" : view === "survey-workspace" ? "Fișa survey" : view === "team" ? "Echipă" : view === "cpe" ? "Echipamente CPE" : view === "drive" ? "Administrare" : view === "materials" ? "Materiale" : view === "map" ? "Hartă" : view === "client" ? "Client" : view === "route" ? "Traseu FO" : view === "splices" ? "Suduri FO" : view === "documents" ? "Documente" : "Operațiuni site"}</strong></div>
+          <div className="breadcrumb"><span>{isProjectView ? `${activitySections[listViewForActivity(activeProject.activityType)].title} · ${activeProject.id}` : isActivityListView ? "Activități" : "Management"}</span><b>/</b><strong>{view === "projects" ? "Instalări" : view === "interventions" ? "Intervenții" : view === "orange-interventions" ? "Intervenții Orange" : view === "surveys" ? "Survey" : view === "intervention-workspace" ? "Constatare" : view === "intervention-execution" ? "Execuție" : view === "intervention-documentation" ? "Documentare" : view === "survey-workspace" ? "Fișa survey" : view === "team" ? "Echipă" : view === "cpe" ? "Echipamente CPE" : view === "drive" ? "Administrare" : view === "materials" ? "Materiale" : view === "reports" ? "Rapoarte lunare" : view === "map" ? "Hartă" : view === "client" ? "Client" : view === "route" ? "Traseu FO" : view === "splices" ? "Suduri FO" : view === "documents" ? "Documente" : "Operațiuni site"}</strong></div>
           <div className="top-actions">
             <button className="help-button" aria-label="Ajutor">?</button>
             <button className="bell" aria-label="Notificări">●<span>3</span></button>
@@ -1300,6 +1323,7 @@ export default function Home() {
             <button className={view === "orange-interventions" ? "active" : ""} onClick={() => goTo("orange-interventions")}>Orange</button>
             {currentAccount.role === "Tehnician" && <button className={view === "map" ? "active" : ""} onClick={() => goTo("map")}>Hartă</button>}
             {canManageDocuments && <button className={view === "team" ? "active" : ""} onClick={() => goTo("team")}>Echipă</button>}
+            {canManageDocuments && <button className={view === "reports" ? "active" : ""} onClick={() => goTo("reports")}>Rapoarte</button>}
             {canManageDocuments && <button className={view === "drive" ? "active" : ""} onClick={() => goTo("drive")}>Administrare</button>}
           </nav>
         )}
@@ -1411,10 +1435,12 @@ export default function Home() {
                     <div className={`avatar big ${index === 0 ? "avatar-green" : ""}`}>{initials(account.name)}</div>
                     <div className="account-copy"><strong>{account.name}</strong><small>@{account.username}</small><span className={account.role === "Tehnician" ? "role" : "role role-dark"}>{account.role}</span></div>
                     <div className="account-meta"><span><i className={account.active ? "online" : ""} />{account.active ? "Activ" : "Inactiv"}</span><small>{account.role === "Tehnician" ? `${account.jobs} lucrări` : "Acces complet"}</small></div>
+                    {account.role === "Tehnician" && <label className="account-contractor"><span>Contractor</span><input list="contractor-options" defaultValue={account.contractor} readOnly={authenticatedAccount?.role !== "Admin"} onBlur={(event) => { const value = event.currentTarget.value.trim(); if (value !== account.contractor) void saveTechnicianContractor(account.username, value); }} /></label>}
                     <button className="more" aria-label={`Opțiuni cont ${account.username}`}>•••</button>
                   </article>
                 ))}
               </div>
+              <datalist id="contractor-options">{Array.from(new Set(accounts.map((account) => account.contractor).filter(Boolean))).map((contractor) => <option key={contractor} value={contractor} />)}</datalist>
             </section>
           </div>
         )}
@@ -1620,6 +1646,7 @@ export default function Home() {
         />}
         {view === "map" && currentAccount.role === "Tehnician" && <TechnicianMap />}
         {view === "materials" && canManageDocuments && <MaterialInventory onNotify={showToast} />}
+        {view === "reports" && canManageDocuments && <MonthlyReports onNotify={showToast} />}
         {view === "drive" && authenticatedAccount?.role === "Admin" && <>
           <GoogleDriveSettings initialStatus={driveStatus} onStatusChange={setDriveStatus} onNotify={showToast} />
           <OneDriveSettings />
@@ -1706,6 +1733,7 @@ export default function Home() {
               <label><span>Username *</span><input name="username" required autoComplete="off" placeholder="ex. andrei.m" /></label>
               <label><span>Parolă temporară *</span><input name="password" required type="password" minLength={8} autoComplete="new-password" placeholder="Minimum 8 caractere" /><small>Utilizatorul o va schimba la prima autentificare.</small></label>
               <label><span>Rol *</span><select name="role"><option>Tehnician</option><option>Admin</option><option>Coordonator</option><option>Manager</option></select></label>
+              <label><span>Contractor (opțional)</span><input name="contractor" list="contractor-options" /><small>Se folosește numai pentru rapoartele tehnicienilor.</small></label>
             </div>
             <div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setModal(null)}>Anulează</button><button className="primary-button" type="submit">Creează contul</button></div>
           </form>

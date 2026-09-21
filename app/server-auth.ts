@@ -6,6 +6,7 @@ export type AuthenticatedAccount = {
   username: string;
   name: string;
   role: AppRole;
+  contractor: string;
   active: boolean;
   jobs: number;
   passwordResetRequired: boolean;
@@ -91,6 +92,7 @@ function toPublicAccount(user: StoredUser): AuthenticatedAccount {
     username: user.username,
     name: user.name,
     role: user.role,
+    contractor: "",
     active: Boolean(user.active),
     jobs: user.jobs,
     passwordResetRequired: Boolean(user.password_reset_required),
@@ -104,6 +106,7 @@ async function makeUserRow(input: {
   password: string;
   jobs?: number;
   passwordResetRequired?: boolean;
+  contractor?: string;
 }) {
   const salt = randomHex(16);
   const passwordHash = await hashPassword(input.password, salt);
@@ -118,6 +121,7 @@ async function makeUserRow(input: {
     passwordSalt: salt,
     passwordIterations: PASSWORD_ITERATIONS,
     passwordResetRequired: input.passwordResetRequired ? 1 : 0,
+    contractor: input.contractor?.trim() ?? "",
     jobs: input.jobs ?? 0,
     createdAt: now,
     updatedAt: now,
@@ -279,21 +283,23 @@ export async function updatePassword(request: Request, password: string) {
 }
 
 export async function listAccounts() {
+  await ensureTechnicianContractorsTable();
   const result = await database()
-    .prepare("SELECT username, name, role, active, jobs, password_reset_required FROM app_users ORDER BY CASE WHEN role = 'Admin' THEN 0 ELSE 1 END, name")
-    .all<Pick<StoredUser, "username" | "name" | "role" | "active" | "jobs" | "password_reset_required">>();
+    .prepare("SELECT app_users.username, app_users.name, app_users.role, COALESCE(technician_contractors.contractor, '') AS contractor, app_users.active, app_users.jobs, app_users.password_reset_required FROM app_users LEFT JOIN technician_contractors ON technician_contractors.technician_username = app_users.username ORDER BY CASE WHEN app_users.role = 'Admin' THEN 0 ELSE 1 END, app_users.name")
+    .all<Pick<StoredUser, "username" | "name" | "role" | "active" | "jobs" | "password_reset_required"> & { contractor: string }>();
 
-  return (result.results ?? []).map((user: Pick<StoredUser, "username" | "name" | "role" | "active" | "jobs" | "password_reset_required">) => ({
+  return (result.results ?? []).map((user) => ({
     username: user.username,
     name: user.name,
     role: user.role,
+    contractor: user.contractor ?? "",
     active: Boolean(user.active),
     jobs: user.jobs,
     passwordResetRequired: Boolean(user.password_reset_required),
   }));
 }
 
-export async function addAccount(input: { username: string; name: string; role: AppRole; password: string }) {
+export async function addAccount(input: { username: string; name: string; role: AppRole; password: string; contractor?: string }) {
   const username = input.username.trim().toLowerCase();
   if (!/^[a-z0-9][a-z0-9._-]{1,63}$/.test(username)) {
     return { error: "Username-ul trebuie să conțină între 2 și 64 de litere, cifre, punct, liniuță sau underscore.", status: 400 as const };
@@ -309,14 +315,34 @@ export async function addAccount(input: { username: string; name: string; role: 
 
   const user = await makeUserRow({ ...input, username, passwordResetRequired: true });
   await insertUserStatement(user).run();
+  if (input.role === "Tehnician" && user.contractor) {
+    await ensureTechnicianContractorsTable();
+    await database().prepare("INSERT INTO technician_contractors (technician_username, contractor, updated_at) VALUES (?, ?, ?) ON CONFLICT(technician_username) DO UPDATE SET contractor = excluded.contractor, updated_at = excluded.updated_at").bind(user.username, user.contractor, Date.now()).run();
+  }
   return {
     account: {
       username: user.username,
       name: user.name,
       role: user.role,
+      contractor: user.contractor,
       active: true,
       jobs: user.jobs,
       passwordResetRequired: true,
     },
   };
+}
+
+export async function updateAccountContractor(usernameInput: string, contractorInput: string) {
+  const username = usernameInput.trim().toLowerCase();
+  const contractor = contractorInput.trim().slice(0, 160);
+  const account = await database().prepare("SELECT username, role FROM app_users WHERE username = ? LIMIT 1").bind(username).first<{ username: string; role: AppRole }>();
+  if (!account) return { error: "Contul nu există.", status: 404 as const };
+  if (account.role !== "Tehnician") return { error: "Contractorul poate fi asociat numai tehnicienilor.", status: 400 as const };
+  await ensureTechnicianContractorsTable();
+  await database().prepare("INSERT INTO technician_contractors (technician_username, contractor, updated_at) VALUES (?, ?, ?) ON CONFLICT(technician_username) DO UPDATE SET contractor = excluded.contractor, updated_at = excluded.updated_at").bind(username, contractor, Date.now()).run();
+  return { username, contractor };
+}
+
+export async function ensureTechnicianContractorsTable() {
+  await database().prepare("CREATE TABLE IF NOT EXISTS technician_contractors (technician_username TEXT PRIMARY KEY, contractor TEXT NOT NULL DEFAULT '', updated_at INTEGER NOT NULL)").run();
 }

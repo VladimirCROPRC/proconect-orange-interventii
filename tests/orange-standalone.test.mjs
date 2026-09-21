@@ -180,3 +180,20 @@ test("Orange technicians are not asked for Pretask or EIP", async () => {
   assert.match(server, /safetyChecks\[project\.id\] = \{ pretask: false, ppe: false, completed: true \}/);
   assert.match(filesRoute, /Tichetele Orange nu utilizează fotografii Pretask\/EIP/);
 });
+
+test("monthly Anexa 3 reports are grouped by technician and contractor", async () => {
+  const page = await source("app/page.tsx");
+  const reports = await source("app/monthly-contractor-reports.ts");
+  const route = await source("app/api/monthly-reports/route.ts");
+  const accounts = await source("app/api/accounts/route.ts");
+  assert.match(page, /Rapoarte lunare/);
+  assert.match(page, /saveTechnicianContractor/);
+  assert.match(reports, /completedByTechnicians/);
+  assert.match(reports, /subjectsFor\("technician"/);
+  assert.match(reports, /subjectsFor\("contractor"/);
+  assert.match(reports, /Material custodie/);
+  assert.match(reports, /Anexa-3-Contractor\.xlsx/);
+  assert.match(route, /buildAllMonthlyReports/);
+  assert.match(accounts, /updateAccountContractor/);
+  assert.match(reports, /CREATE TABLE IF NOT EXISTS technician_contractors/);
+});
