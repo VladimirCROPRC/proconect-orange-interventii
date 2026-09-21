@@ -247,3 +247,20 @@ test("mail preview recognizes the FITT and IMO message formats", async () => {
   assert.equal(imo.siteB, "TI0731");
   assert.equal(imo.foSection, "FO TI0445_9 to TI0731_1");
 });
+
+test("automatic mail import is scheduled, deduplicated, and starts at activation", async () => {
+  const worker = await source("worker/index.ts");
+  const config = await source("wrangler.jsonc");
+  const importer = await source("app/orange-mail-import.ts");
+  const migration = await source("drizzle/0012_orange_mail_import.sql");
+  const settings = await source("app/onedrive-settings.tsx");
+  assert.match(worker, /async scheduled/);
+  assert.match(worker, /importOrangeMailTickets/);
+  assert.match(config, /"crons"\s*:\s*\["\* \* \* \* \*"\]/);
+  assert.match(importer, /SELECT message_id FROM orange_mail_messages/);
+  assert.match(importer, /SELECT id FROM projects WHERE id = \?/);
+  assert.match(importer, /syncProjectIfConnected\(message\.ticketId\)/);
+  assert.match(migration, /VALUES \('orange', 1, unixepoch\('now'\) \* 1000/);
+  assert.match(settings, /Import automat e-mail/);
+  assert.match(settings, /Verifică e-mailurile acum/);
+});

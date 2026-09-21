@@ -203,18 +203,23 @@ export async function oneDriveStatus() {
 }
 
 export async function previewOrangeMail() {
+  return readOrangeMail(0, 25);
+}
+
+export async function readOrangeMail(since = 0, limit = 25) {
   const c = await connection();
   if (!c?.refresh_token) throw new Error("Conectează contul Microsoft 365 înainte de testarea e-mailurilor.");
   const token = await tokenFor(c);
   const query = new URLSearchParams({
-    "$top": "25",
+    "$top": String(Math.max(1, Math.min(50, Math.trunc(limit)))),
     "$orderby": "receivedDateTime desc",
     "$select": "id,subject,receivedDateTime,bodyPreview,body",
   });
+  if (since > 0) query.set("$filter", `receivedDateTime ge ${new Date(since).toISOString()}`);
   const response = await graph(token, `/me/mailFolders/inbox/messages?${query}`, { headers: { Prefer: 'outlook.body-content-type="text"' } });
   if (response.status === 401 || response.status === 403) throw new Error("Permisiunea Mail.Read lipsește. Adaug-o în Microsoft Entra și reconectează contul din aplicație.");
   const payload = await graphJson<{ value?: Array<{ id?: string; subject?: string; receivedDateTime?: string; bodyPreview?: string; body?: { content?: string } }> }>(response);
-  const messages = (payload.value ?? []).map(parseOrangeMail).filter((item): item is NonNullable<typeof item> => Boolean(item));
+  const messages = (payload.value ?? []).map(parseOrangeMail).filter((item): item is NonNullable<typeof item> => Boolean(item?.messageId));
   return { scanned: payload.value?.length ?? 0, messages };
 }
 type OrangeWorkbookDriveItem = {

@@ -11,6 +11,9 @@
 	"observability": {
 		"enabled": true
 	},
+	"triggers": {
+		"crons": ["* * * * *"]
+	},
 	
 	"vars": {
   "PROCONECT_APP_URL": "https://orange.proconect.online"

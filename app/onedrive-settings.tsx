@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
-type Status = { configured: boolean; connected: boolean; mode: string; account: string; rootUrl: string; synced: number; pending: number; errors: { kind: string; item_id: string; last_error: string }[] };
-type Payload = Status & { error?: string; authorizationUrl?: string };
+type MailImportStatus = { enabled: boolean; activatedAt: number; lastRunAt: number; lastError: string; processed: number; created: number };
+type Status = { configured: boolean; connected: boolean; mode: string; account: string; rootUrl: string; synced: number; pending: number; errors: { kind: string; item_id: string; last_error: string }[]; mailImport?: MailImportStatus };
+type Payload = Status & { error?: string; authorizationUrl?: string; importResult?: { createdNow?: number } };
 type MailPreview = { scanned: number; messages: Array<{ messageId: string; ticketId: string; flow: "FITT" | "IMO"; subject: string; receivedAt: string; siteA: string; siteB: string; foSection: string; locality: string; county: string; severity: string; etr: string; incidentDescription: string }> };
 export function OneDriveSettings() {
   const [status, setStatus] = useState<Status | null>(null);
@@ -38,6 +39,16 @@ export function OneDriveSettings() {
       if (!response.ok) throw new Error(data.error || "Mesajele nu au putut fi citite.");
       setMailPreview(data);
     } catch (e) { setError(e instanceof Error ? e.message : "Testul e-mail a eșuat."); }
+    finally { setBusy(false); }
+  }
+  async function mailImportAction(actionName: "mail-import" | "run-mail-import", enabled?: boolean) {
+    setBusy(true); setError("");
+    try {
+      const response = await fetch("/api/onedrive", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: actionName, enabled }) });
+      const data = await response.json() as Payload;
+      if (!response.ok) throw new Error(data.error || "Importul automat nu a putut fi actualizat.");
+      setStatus(data);
+    } catch (e) { setError(e instanceof Error ? e.message : "Importul automat a eșuat."); }
     finally { setBusy(false); }
   }
   useEffect(() => {
@@ -81,6 +92,15 @@ export function OneDriveSettings() {
             <div className="table-wrap"><table><thead><tr><th>TICHET</th><th>FLUX</th><th>SITE / SECȚIUNE</th><th>LOCALITATE / JUDEȚ</th><th>PRIMIT</th></tr></thead><tbody>
               {mailPreview.messages.map(message => <tr key={message.messageId}><td><strong className="rid">{message.ticketId}</strong><small>{message.subject}</small></td><td>{message.flow}</td><td><strong>{[message.siteA, message.siteB].filter(Boolean).join(" ↔ ") || "—"}</strong><small>{message.foSection || "Fără secțiune identificată"}</small></td><td><strong>{message.locality || "—"}</strong><small>{message.county || "Fără județ identificat"}</small></td><td>{message.receivedAt ? new Date(message.receivedAt).toLocaleString("ro-RO") : "—"}</td></tr>)}
             </tbody></table></div>
+          </div>}
+          {status.mailImport && <div>
+            <p><strong>Import automat e-mail: {status.mailImport.enabled ? "Activ" : "Oprit"}</strong></p>
+            <p>{status.mailImport.created} tichete create din {status.mailImport.processed} mesaje procesate.{status.mailImport.lastRunAt ? ` Ultima verificare: ${new Date(status.mailImport.lastRunAt).toLocaleString("ro-RO")}.` : ""}</p>
+            {status.mailImport.lastError && <p className="drive-inline-error" role="alert">{status.mailImport.lastError}</p>}
+            <div className="drive-config-actions">
+              <button className="primary-button" disabled={busy || processing || !status.mailImport.enabled} onClick={() => void mailImportAction("run-mail-import")}>Verifică e-mailurile acum</button>
+              <button className="secondary-button" disabled={busy || processing} onClick={() => void mailImportAction("mail-import", !status.mailImport?.enabled)}>{status.mailImport.enabled ? "Oprește importul automat" : "Activează importul automat"}</button>
+            </div>
           </div>}
           <p>{status.synced} elemente sincronizate · {status.pending} în așteptare</p>
           <div className="drive-config-actions"><button className="primary-button" disabled={busy || processing || status.mode === "google"} onClick={() => void action("retry")}>Resincronizează proiectele și fișierele</button>{processing && <button className="secondary-button" onClick={() => setProcessing(false)}>Oprește procesarea din acest ecran</button>}</div>

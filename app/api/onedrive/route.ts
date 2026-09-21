@@ -1,4 +1,5 @@
 import { beginOneDrive, disconnectOneDrive, drainOneDrive, oneDriveSameOrigin, oneDriveStatus, previewOrangeMail, retryOneDrive, setBackupMode, syncOneDriveProject } from "../../onedrive-server";
+import { importOrangeMailTickets, orangeMailImportStatus, setOrangeMailImportEnabled } from "../../orange-mail-import";
 import { currentSession } from "../../server-auth";
 export const dynamic = "force-dynamic";
 async function authorized(request: Request) {
@@ -15,14 +16,14 @@ async function authenticated(request: Request) {
 export async function GET(request: Request) {
   try {
     const auth = await authorized(request); if (auth.response) return auth.response;
-    return Response.json(await oneDriveStatus(), { headers: { "Cache-Control": "no-store" } });
+    return Response.json({ ...(await oneDriveStatus()), mailImport: await orangeMailImportStatus() }, { headers: { "Cache-Control": "no-store" } });
   } catch { return Response.json({ error: "Starea OneDrive nu este disponibilă. Verifică migrarea bazei de date și configurarea Cloudflare." }, { status: 503 }); }
 }
 export async function POST(request: Request) {
   try {
     const auth = await authenticated(request); if (auth.response) return auth.response;
     if (!oneDriveSameOrigin(request)) return Response.json({ error: "Origine neautorizată sau PROCONECT_APP_URL neconfigurat." }, { status: 403 });
-    const body = await request.json() as { action?: string; mode?: unknown; projectId?: unknown; restart?: unknown };
+    const body = await request.json() as { action?: string; mode?: unknown; projectId?: unknown; restart?: unknown; enabled?: unknown };
     if (body.action === "sync-project") {
       if (!["Admin", "Manager", "Coordonator"].includes(auth.session!.account.role)) return Response.json({ error: "Acces rezervat coordonatorilor și managerilor." }, { status: 403 });
       const projectSync = await syncOneDriveProject(body.projectId, body.restart === true);
@@ -33,6 +34,14 @@ export async function POST(request: Request) {
       try { return Response.json(await previewOrangeMail(), { headers: { "Cache-Control": "no-store" } }); }
       catch (error) { return Response.json({ error: error instanceof Error ? error.message : "Mesajele nu au putut fi citite." }, { status: 503, headers: { "Cache-Control": "no-store" } }); }
     }
+    if (body.action === "mail-import") {
+      const mailImport = await setOrangeMailImportEnabled(body.enabled === true);
+      return Response.json({ ...(await oneDriveStatus()), mailImport }, { headers: { "Cache-Control": "no-store" } });
+    }
+    if (body.action === "run-mail-import") {
+      const result = await importOrangeMailTickets();
+      return Response.json({ ...(await oneDriveStatus()), mailImport: await orangeMailImportStatus(), importResult: result }, { headers: { "Cache-Control": "no-store" } });
+    }
     switch (body.action) {
       case "authorize": return Response.json({ authorizationUrl: await beginOneDrive(auth.session!.sessionId) }, { headers: { "Cache-Control": "no-store" } });
       case "mode": await setBackupMode(body.mode); break;
@@ -41,7 +50,7 @@ export async function POST(request: Request) {
       case "process": await drainOneDrive(); break;
       default: return Response.json({ error: "Operațiune invalidă." }, { status: 400 });
     }
-    return Response.json(await oneDriveStatus(), { headers: { "Cache-Control": "no-store" } });
+    return Response.json({ ...(await oneDriveStatus()), mailImport: await orangeMailImportStatus() }, { headers: { "Cache-Control": "no-store" } });
   } catch {
     return Response.json({ error: "Operațiunea nu a reușit. Verifică setările, conectarea OneDrive și aprobarea IT. Nicio parolă Microsoft nu trebuie introdusă în aplicație." }, { status: 503 });
   }

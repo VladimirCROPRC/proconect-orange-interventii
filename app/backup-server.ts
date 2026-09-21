@@ -1,6 +1,6 @@
 import * as google from "./google-drive-server";
 import { backupMode, deleteOneDriveFileCopy, queueOneDrive, syncOrangeTicketWorkbook } from "./onedrive-server";
-import { usesGoogle } from "./onedrive-core";
+import { usesGoogle, usesOneDrive } from "./onedrive-core";
 import { getFileRow } from "./project-server";
 
 async function both(kind: "file" | "project", id: string, googleSync: () => Promise<unknown>) {

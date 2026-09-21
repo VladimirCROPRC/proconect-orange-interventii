@@ -2,6 +2,7 @@
 import { handleImageOptimization, DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } from "vinext/server/image-optimization";
 import handler from "vinext/server/app-router-entry";
 import { drainOneDrive, oneDriveConfigured } from "../app/onedrive-server";
+import { importOrangeMailTickets } from "../app/orange-mail-import";
 
 interface Env {
   ASSETS: Fetcher;
@@ -46,6 +47,9 @@ const worker = {
       ctx.waitUntil(drainOneDrive().catch(() => console.error("OneDrive background processing requires retry")));
     }
     return response;
+  },
+  async scheduled(_controller: ScheduledController, _env: Env, ctx: ExecutionContext): Promise<void> {
+    ctx.waitUntil(importOrangeMailTickets().catch((error) => console.error("Orange mail import failed", error instanceof Error ? error.message : "Unknown failure")));
   },
 };
 
