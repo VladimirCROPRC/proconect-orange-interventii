@@ -2,11 +2,13 @@
 import { useEffect, useState } from "react";
 type Status = { configured: boolean; connected: boolean; mode: string; account: string; rootUrl: string; synced: number; pending: number; errors: { kind: string; item_id: string; last_error: string }[] };
 type Payload = Status & { error?: string; authorizationUrl?: string };
+type MailPreview = { scanned: number; messages: Array<{ messageId: string; ticketId: string; flow: "FITT" | "IMO"; subject: string; receivedAt: string; siteA: string; siteB: string; foSection: string; locality: string; county: string; severity: string; etr: string; incidentDescription: string }> };
 export function OneDriveSettings() {
   const [status, setStatus] = useState<Status | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [processing, setProcessing] = useState(false);
+  const [mailPreview, setMailPreview] = useState<MailPreview | null>(null);
   useEffect(() => {
     let mounted = true;
     fetch("/api/onedrive", { cache: "no-store" }).then(async response => {
@@ -26,6 +28,16 @@ export function OneDriveSettings() {
       setStatus(data as Status);
       if (actionName === "retry") setProcessing(true);
     } catch (e) { setError(e instanceof Error ? e.message : "Operațiunea a eșuat."); }
+    finally { setBusy(false); }
+  }
+  async function previewMail() {
+    setBusy(true); setError(""); setMailPreview(null);
+    try {
+      const response = await fetch("/api/onedrive", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "preview-mail" }) });
+      const data = await response.json() as MailPreview & { error?: string };
+      if (!response.ok) throw new Error(data.error || "Mesajele nu au putut fi citite.");
+      setMailPreview(data);
+    } catch (e) { setError(e instanceof Error ? e.message : "Testul e-mail a eșuat."); }
     finally { setBusy(false); }
   }
   useEffect(() => {
@@ -63,6 +75,13 @@ export function OneDriveSettings() {
         </div>
         {status.connected && <>
           {status.rootUrl && <a href={status.rootUrl} target="_blank" rel="noreferrer">Deschide dosarul OneDrive ↗</a>}
+          <div className="drive-config-actions"><button className="secondary-button" disabled={busy || processing} onClick={() => void previewMail()}>Testează importul e-mail</button></div>
+          {mailPreview && <div>
+            <p><strong>{mailPreview.messages.length} mesaje FITT/IMO recunoscute</strong> din ultimele {mailPreview.scanned} mesaje. Testul nu a creat tichete.</p>
+            <div className="table-wrap"><table><thead><tr><th>TICHET</th><th>FLUX</th><th>SITE / SECȚIUNE</th><th>LOCALITATE / JUDEȚ</th><th>PRIMIT</th></tr></thead><tbody>
+              {mailPreview.messages.map(message => <tr key={message.messageId}><td><strong className="rid">{message.ticketId}</strong><small>{message.subject}</small></td><td>{message.flow}</td><td><strong>{[message.siteA, message.siteB].filter(Boolean).join(" ↔ ") || "—"}</strong><small>{message.foSection || "Fără secțiune identificată"}</small></td><td><strong>{message.locality || "—"}</strong><small>{message.county || "Fără județ identificat"}</small></td><td>{message.receivedAt ? new Date(message.receivedAt).toLocaleString("ro-RO") : "—"}</td></tr>)}
+            </tbody></table></div>
+          </div>}
           <p>{status.synced} elemente sincronizate · {status.pending} în așteptare</p>
           <div className="drive-config-actions"><button className="primary-button" disabled={busy || processing || status.mode === "google"} onClick={() => void action("retry")}>Resincronizează proiectele și fișierele</button>{processing && <button className="secondary-button" onClick={() => setProcessing(false)}>Oprește procesarea din acest ecran</button>}</div>
           <p>{processing ? "Se procesează pe rând. Păstrează acest ecran deschis pentru copierea întregii arhive." : "Proiectele noi creează automat structura de foldere. Resincronizarea recreează folderele lipsă și retrimite toate fotografiile și documentele active."}</p>

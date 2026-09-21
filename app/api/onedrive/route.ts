@@ -1,4 +1,4 @@
-import { beginOneDrive, disconnectOneDrive, drainOneDrive, oneDriveSameOrigin, oneDriveStatus, retryOneDrive, setBackupMode, syncOneDriveProject } from "../../onedrive-server";
+import { beginOneDrive, disconnectOneDrive, drainOneDrive, oneDriveSameOrigin, oneDriveStatus, previewOrangeMail, retryOneDrive, setBackupMode, syncOneDriveProject } from "../../onedrive-server";
 import { currentSession } from "../../server-auth";
 export const dynamic = "force-dynamic";
 async function authorized(request: Request) {
@@ -29,6 +29,10 @@ export async function POST(request: Request) {
       return Response.json({ projectSync }, { headers: { "Cache-Control": "no-store" } });
     }
     if (auth.session!.account.role !== "Admin") return Response.json({ error: "Acces rezervat administratorului." }, { status: 403 });
+    if (body.action === "preview-mail") {
+      try { return Response.json(await previewOrangeMail(), { headers: { "Cache-Control": "no-store" } }); }
+      catch (error) { return Response.json({ error: error instanceof Error ? error.message : "Mesajele nu au putut fi citite." }, { status: 503, headers: { "Cache-Control": "no-store" } }); }
+    }
     switch (body.action) {
       case "authorize": return Response.json({ authorizationUrl: await beginOneDrive(auth.session!.sessionId) }, { headers: { "Cache-Control": "no-store" } });
       case "mode": await setBackupMode(body.mode); break;

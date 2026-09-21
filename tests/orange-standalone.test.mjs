@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readdir, readFile } from "node:fs/promises";
+import { stripTypeScriptTypes } from "node:module";
 import test from "node:test";
 
 const root = new URL("../", import.meta.url);
@@ -17,6 +18,10 @@ async function sourceFiles(directory) {
     else if (/\.(?:ts|tsx|js|mjs|json|md|sql)$/.test(entry.name)) files.push(relative);
   }
   return files;
+}
+
+function moduleUrl(text) {
+  return `data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(text, { mode: "transform", disableExperimentalWarning: true })).toString("base64")}`;
 }
 
 test("uses dedicated Orange Cloudflare resources", async () => {
@@ -219,4 +224,26 @@ test("a manager can synchronize one Orange ticket without starting the bulk queu
   assert.match(route, /syncOneDriveProject\(body\.projectId/);
   assert.match(server, /export async function syncOneDriveProject/);
   assert.match(server, /projectJobFilter/);
+});
+
+test("mail preview recognizes the FITT and IMO message formats", async () => {
+  const parser = await import(moduleUrl(await source("app/orange-mail.ts")));
+  const fitt = parser.parseOrangeMail({
+    id: "mail-fitt", subject: "FITT00000141440 / Assigned / Minor / ORO", receivedDateTime: "2026-09-21T09:21:00Z",
+    body: { content: "OLT/EDFA name:: OLT1-TI0001\nSeverity:: Minor\nETR:: 9/20/2026 7:10:27 AM\nLocality:: Nadlac (LOC)\nCounty:: Arad\nIncident description:: Resurse NICM" },
+  });
+  assert.equal(fitt.ticketId, "FITT00000141440");
+  assert.equal(fitt.siteA, "OLT1-TI0001");
+  assert.equal(fitt.locality, "Nadlac");
+  assert.equal(fitt.county, "Arad County");
+  assert.equal(fitt.incidentDescription, "Resurse NICM");
+
+  const imo = parser.parseOrangeMail({
+    id: "mail-imo", subject: "RE: LOSS OF SIGNAL NEC TI0445 <> TI0731 /// IMO000000313321", receivedDateTime: "2026-09-19T17:56:00Z",
+    body: { content: "2026-09-19 17:37:08 Section FO TI0445_9 to TI0731_1\nSignal Level Trace" },
+  });
+  assert.equal(imo.ticketId, "IMO000000313321");
+  assert.equal(imo.siteA, "TI0445");
+  assert.equal(imo.siteB, "TI0731");
+  assert.equal(imo.foSection, "FO TI0445_9 to TI0731_1");
 });

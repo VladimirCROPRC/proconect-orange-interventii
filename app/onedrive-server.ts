@@ -6,6 +6,7 @@ import { buildSpliceSheetXlsx } from "./splice-xlsx";
 import { buildMaterialSheetPdf } from "./material-pdf";
 import { buildOrangeQafXlsx } from "./orange-qaf";
 import { buildOrangeKmz } from "./orange-kmz";
+import { parseOrangeMail } from "./orange-mail";
 import { base64url, decode64, fixedOrigin, retryDelay, safeName, usesOneDrive, validMode, workbookTicketRow, type BackupMode } from "./onedrive-core";
 
 type Environment = { PROCONECT_APP_URL?: string; ONEDRIVE_CLIENT_ID?: string; ONEDRIVE_TENANT_ID?: string; ONEDRIVE_CLIENT_SECRET?: string; ONEDRIVE_ENCRYPTION_KEY?: string; ORANGE_TICKETS_WORKBOOK_URL?: string };
@@ -14,7 +15,7 @@ type Job = { id: string; kind: "file" | "project"; item_id: string; revision: nu
 type Item = { id: string; webUrl?: string; folder?: object; driveType?: string; owner?: { user?: { id?: string; displayName?: string; email?: string } } };
 const encoder = new TextEncoder();
 const settingsId = "onedrive";
-const scope = "offline_access https://graph.microsoft.com/Files.ReadWrite";
+const scope = "offline_access https://graph.microsoft.com/Files.ReadWrite https://graph.microsoft.com/Mail.Read";
 const environment = () => env as unknown as Environment;
 export function oneDriveConfigured() {
   const e = environment();
@@ -74,7 +75,7 @@ async function exchange(parameters: URLSearchParams) {
 }
 async function graph(token: string, path: string, options: RequestInit = {}) {
   const workbookPath = /^\/drives\/[^/]+\/items\/[^/]+\/workbook(?:\/|$)/.test(path);
-  if (!path.startsWith("/me/drive") && !path.startsWith("/shares/") && !workbookPath) throw new Error("Adresă Graph nepermisă.");
+  if (!path.startsWith("/me/drive") && !path.startsWith("/me/mailFolders/") && !path.startsWith("/shares/") && !workbookPath) throw new Error("Adresă Graph nepermisă.");
   const headers = new Headers(options.headers); headers.set("Authorization", `Bearer ${token}`);
   return fetch(`https://graph.microsoft.com/v1.0${path}`, { ...options, headers, signal: AbortSignal.timeout(20_000) });
 }
@@ -199,6 +200,22 @@ export async function oneDriveStatus() {
   const counts = await getRawDb().prepare("SELECT SUM(CASE WHEN done_revision = revision THEN 1 ELSE 0 END) AS synced, SUM(CASE WHEN done_revision < revision THEN 1 ELSE 0 END) AS pending FROM onedrive_jobs").first<{ synced: number; pending: number }>();
   const errors = await getRawDb().prepare("SELECT kind, item_id, last_error FROM onedrive_jobs WHERE last_error != '' ORDER BY next_at LIMIT 10").all();
   return { configured, connected: Boolean(c?.refresh_token), mode: c?.mode ?? "google", account: c?.account ?? "", rootUrl: c?.root_url ?? "", synced: counts?.synced ?? 0, pending: counts?.pending ?? 0, errors: errors.results ?? [] };
+}
+
+export async function previewOrangeMail() {
+  const c = await connection();
+  if (!c?.refresh_token) throw new Error("Conectează contul Microsoft 365 înainte de testarea e-mailurilor.");
+  const token = await tokenFor(c);
+  const query = new URLSearchParams({
+    "$top": "25",
+    "$orderby": "receivedDateTime desc",
+    "$select": "id,subject,receivedDateTime,bodyPreview,body",
+  });
+  const response = await graph(token, `/me/mailFolders/inbox/messages?${query}`, { headers: { Prefer: 'outlook.body-content-type="text"' } });
+  if (response.status === 401 || response.status === 403) throw new Error("Permisiunea Mail.Read lipsește. Adaug-o în Microsoft Entra și reconectează contul din aplicație.");
+  const payload = await graphJson<{ value?: Array<{ id?: string; subject?: string; receivedDateTime?: string; bodyPreview?: string; body?: { content?: string } }> }>(response);
+  const messages = (payload.value ?? []).map(parseOrangeMail).filter((item): item is NonNullable<typeof item> => Boolean(item));
+  return { scanned: payload.value?.length ?? 0, messages };
 }
 type OrangeWorkbookDriveItem = {
   id?: string;
