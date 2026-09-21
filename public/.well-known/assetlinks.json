@@ -22,5 +22,17 @@
         "4F:CE:65:D4:04:A6:10:31:4B:D0:40:EF:9F:77:D0:52:81:0D:C9:35:5E:F9:15:D2:5A:4B:76:02:A6:AB:B3:92"
       ]
     }
+  },
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "online.proconect.orange.twa",
+      "sha256_cert_fingerprints": [
+        "C1:C6:C4:57:CC:48:2F:14:3C:47:D9:10:4D:14:1B:41:CD:93:2F:1C:D4:5A:16:9F:4D:28:A2:D7:7B:34:EA:45"
+      ]
+    }
   }
 ]
