@@ -140,6 +140,7 @@ test("Orange ticket creation only requires the ticket number and uses the manual
   const qaf = await source("app/orange-qaf.ts");
   const centralizer = await source("app/orange-centralizer.ts");
   const oneDrive = await source("app/onedrive-server.ts");
+  const backup = await source("app/backup-server.ts");
   assert.match(page, /Număr tichet \*<\/span><input name="requestId" required/);
   assert.match(page, /Data și ora solicitării intervenției<\/span><input type="datetime-local" name="requestDate"/);
   assert.match(page, /date: isOrangeForm \? String\(form\.get\("requestDate"\)/);
@@ -150,6 +151,8 @@ test("Orange ticket creation only requires the ticket number and uses the manual
   assert.match(qaf, /time: match\[4\] && match\[5\] \? `\$\{match\[4\]\}:\$\{match\[5\]\}` : ""/);
   assert.match(centralizer, /requestDateTimestamp\(project\.scheduled_label/);
   assert.match(oneDrive, /orangeRequestTimestamp\(project\.scheduled_label/);
+  assert.match(backup, /export async function syncProjectIfConnected/);
+  assert.match(backup, /usesOneDrive\(mode\) \? syncOrangeTicketWorkbook\(id\)/);
 });
 
 test("Orange tickets support multiple assigned and completing technicians", async () => {

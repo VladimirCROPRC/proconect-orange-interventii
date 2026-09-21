@@ -12,7 +12,18 @@ async function both(kind: "file" | "project", id: string, googleSync: () => Prom
   ]);
   for (const result of outcomes) if (result.status === "rejected") console.error("Backup destination requires retry");
 }
-export const syncProjectIfConnected = (id: string) => both("project", id, () => google.syncProjectIfConnected(id));
+export async function syncProjectIfConnected(id: string) {
+  const mode = await backupMode();
+  // A newly generated Orange ticket must appear in the Excel centralizer
+  // immediately. The queued project job remains the retry path and also
+  // generates the OneDrive folder, QAF and KMZ when field data is available.
+  const outcomes = await Promise.allSettled([
+    queueOneDrive("project", id),
+    usesOneDrive(mode) ? syncOrangeTicketWorkbook(id) : Promise.resolve(),
+    usesGoogle(mode) ? google.syncProjectIfConnected(id) : Promise.resolve(),
+  ]);
+  for (const result of outcomes) if (result.status === "rejected") console.error("Project synchronization requires retry");
+}
 export async function syncReportIfConnected(id: string) {
   const mode = await backupMode();
   // Field actions update Excel Online immediately. The queued project export
