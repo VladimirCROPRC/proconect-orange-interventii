@@ -57,8 +57,8 @@ export async function importOrangeMailTickets() {
     const preview = await readOrangeMail(state.activatedAt, 50);
     const messages = [...preview.messages].sort((first, second) => first.receivedAt.localeCompare(second.receivedAt));
     for (const message of messages) {
-      const handled = await getRawDb().prepare("SELECT message_id FROM orange_mail_messages WHERE message_id = ? LIMIT 1").bind(message.messageId).first();
-      if (handled) continue;
+      const handled = await getRawDb().prepare("SELECT status FROM orange_mail_messages WHERE message_id = ? LIMIT 1").bind(message.messageId).first<{ status?: string }>();
+      if (handled?.status === "created" || handled?.status === "duplicate") continue;
       const duplicate = await getRawDb().prepare("SELECT id FROM projects WHERE id = ? LIMIT 1").bind(message.ticketId).first();
       if (duplicate) {
         await getRawDb().prepare("INSERT OR IGNORE INTO orange_mail_messages (message_id, ticket_id, received_at, status, error, processed_at) VALUES (?, ?, ?, 'duplicate', '', ?)")
@@ -81,7 +81,7 @@ export async function importOrangeMailTickets() {
           .bind(message.messageId, message.ticketId, message.receivedAt, result.error.slice(0, 500), Date.now()).run();
         continue;
       }
-      await getRawDb().prepare("INSERT INTO orange_mail_messages (message_id, ticket_id, received_at, status, error, processed_at) VALUES (?, ?, ?, 'created', '', ?)")
+      await getRawDb().prepare("INSERT OR REPLACE INTO orange_mail_messages (message_id, ticket_id, received_at, status, error, processed_at) VALUES (?, ?, ?, 'created', '', ?)")
         .bind(message.messageId, message.ticketId, message.receivedAt, Date.now()).run();
       createdNow += 1;
       await syncProjectIfConnected(message.ticketId);

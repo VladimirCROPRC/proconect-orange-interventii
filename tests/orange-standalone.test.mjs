@@ -230,12 +230,12 @@ test("mail preview recognizes the FITT and IMO message formats", async () => {
   const parser = await import(moduleUrl(await source("app/orange-mail.ts")));
   const fitt = parser.parseOrangeMail({
     id: "mail-fitt", subject: "FITT00000141440 / Assigned / Minor / ORO", receivedDateTime: "2026-09-21T09:21:00Z",
-    body: { content: "OLT/EDFA name:: OLT1-TI0001\nSeverity:: Minor\nETR:: 9/20/2026 7:10:27 AM\nLocality:: Nadlac (LOC)\nCounty:: Arad\nIncident description:: Resurse NICM" },
+    body: { content: "OLT/EDFA name:: OLT2-TI0337\nSeverity:: Minor\nETR:: 9/22/2026 5:04:29 AM\nLocality:: Mosnita Noua (UAT)\nCounty:: Timis\nIncident description:: Resurse NICM" },
   });
   assert.equal(fitt.ticketId, "FITT00000141440");
-  assert.equal(fitt.siteA, "OLT1-TI0001");
-  assert.equal(fitt.locality, "Nadlac");
-  assert.equal(fitt.county, "Arad County");
+  assert.equal(fitt.siteA, "OLT2-TI0337");
+  assert.equal(fitt.locality, "Mosnita Noua");
+  assert.equal(fitt.county, "");
   assert.equal(fitt.incidentDescription, "Resurse NICM");
 
   const imo = parser.parseOrangeMail({
@@ -257,7 +257,8 @@ test("automatic mail import is scheduled, deduplicated, and starts at activation
   assert.match(worker, /async scheduled/);
   assert.match(worker, /importOrangeMailTickets/);
   assert.match(config, /"crons"\s*:\s*\["\* \* \* \* \*"\]/);
-  assert.match(importer, /SELECT message_id FROM orange_mail_messages/);
+  assert.match(importer, /SELECT status FROM orange_mail_messages/);
+  assert.match(importer, /handled\?\.status === "created"/);
   assert.match(importer, /SELECT id FROM projects WHERE id = \?/);
   assert.match(importer, /syncProjectIfConnected\(message\.ticketId\)/);
   assert.match(migration, /VALUES \('orange', 1, unixepoch\('now'\) \* 1000/);

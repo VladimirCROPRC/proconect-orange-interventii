@@ -32,14 +32,13 @@ export function parseOrangeMail(message: { id?: string; subject?: string; receiv
   const flow = ticket[1].toUpperCase() as "FITT" | "IMO";
 
   if (flow === "FITT") {
-    const locality = field(body, "Locality").replace(/\s*\(LOC\)\s*$/i, "").trim();
-    const countyValue = field(body, "County");
+    const locality = field(body, "Locality").replace(/\s*\((?:LOC|UAT)\)\s*$/i, "").trim();
     return {
       messageId: String(message.id ?? ""), ticketId, flow, subject,
       receivedAt: String(message.receivedDateTime ?? ""),
       siteA: field(body, "OLT/EDFA name"), siteB: "",
       foSection: field(body, "OLT/EDFA name"), locality,
-      county: countyValue ? `${countyValue.replace(/\s+County$/i, "")} County` : "",
+      county: "",
       severity: field(body, "Severity"), etr: field(body, "ETR"),
       incidentDescription: field(body, "Incident description"),
     };
