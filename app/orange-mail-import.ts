@@ -52,9 +52,15 @@ export async function setOrangeMailImportEnabled(enabled: boolean) {
 export async function importOrangeMailTickets() {
   const state = await orangeMailImportStatus();
   if (!state.enabled) return { ...state, scanned: 0, createdNow: 0 };
+  const scanStartedAt = Date.now();
+  // Resume from the previous successful scan. The overlap protects messages
+  // which arrive while Graph is being read or while the previous batch runs.
+  const scanSince = state.lastRunAt
+    ? Math.max(state.activatedAt, state.lastRunAt - 2 * 60 * 1000)
+    : state.activatedAt;
   let createdNow = 0;
   try {
-    const preview = await readOrangeMail(state.activatedAt, 50);
+    const preview = await readOrangeMail(scanSince, 50);
     const messages = [...preview.messages].sort((first, second) => first.receivedAt.localeCompare(second.receivedAt));
     for (const message of messages) {
       const handled = await getRawDb().prepare("SELECT status FROM orange_mail_messages WHERE message_id = ? LIMIT 1").bind(message.messageId).first<{ status?: string }>();
@@ -86,11 +92,13 @@ export async function importOrangeMailTickets() {
       createdNow += 1;
       await syncProjectIfConnected(message.ticketId);
     }
-    await getRawDb().prepare("UPDATE orange_mail_import SET last_run_at = ?, last_error = '' WHERE id = 'orange'").bind(Date.now()).run();
+    await getRawDb().prepare("UPDATE orange_mail_import SET last_run_at = ?, last_error = '' WHERE id = 'orange'").bind(scanStartedAt).run();
     return { ...(await orangeMailImportStatus()), scanned: preview.scanned, createdNow };
   } catch (error) {
     const message = error instanceof Error ? error.message.slice(0, 500) : "Importul automat nu a reușit.";
-    await getRawDb().prepare("UPDATE orange_mail_import SET last_run_at = ?, last_error = ? WHERE id = 'orange'").bind(Date.now(), message).run();
+    // Do not advance the cursor after a failed scan; the same interval must be
+    // retried on the next scheduled run.
+    await getRawDb().prepare("UPDATE orange_mail_import SET last_error = ? WHERE id = 'orange'").bind(message).run();
     throw error;
   }
 }

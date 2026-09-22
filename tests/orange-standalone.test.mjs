@@ -239,13 +239,13 @@ test("mail preview recognizes the FITT and IMO message formats", async () => {
   assert.equal(fitt.incidentDescription, "Resurse NICM");
 
   const imo = parser.parseOrangeMail({
-    id: "mail-imo", subject: "RE: LOSS OF SIGNAL NEC TI0445 <> TI0731 /// IMO000000313321", receivedDateTime: "2026-09-19T17:56:00Z",
-    body: { content: "2026-09-19 17:37:08 Section FO TI0445_9 to TI0731_1\nSignal Level Trace" },
+    id: "mail-imo", subject: "RE: LOSS OF SIGNAL NEC CR0129 <> CR0569 /// IMO000000313623", receivedDateTime: "2026-09-22T06:03:00Z",
+    body: { content: "2026-09-22 06:01:00 Section FO CR0129_1 to CR0569_1\nSignal Level Trace" },
   });
-  assert.equal(imo.ticketId, "IMO000000313321");
-  assert.equal(imo.siteA, "TI0445");
-  assert.equal(imo.siteB, "TI0731");
-  assert.equal(imo.foSection, "FO TI0445_9 to TI0731_1");
+  assert.equal(imo.ticketId, "IMO000000313623");
+  assert.equal(imo.siteA, "CR0129");
+  assert.equal(imo.siteB, "CR0569");
+  assert.equal(imo.foSection, "FO CR0129_1 to CR0569_1");
 });
 
 test("automatic mail import is scheduled, deduplicated, and starts at activation", async () => {
@@ -261,6 +261,10 @@ test("automatic mail import is scheduled, deduplicated, and starts at activation
   assert.match(importer, /handled\?\.status === "created"/);
   assert.match(importer, /SELECT id FROM projects WHERE id = \?/);
   assert.match(importer, /syncProjectIfConnected\(message\.ticketId\)/);
+  assert.match(importer, /state\.lastRunAt - 2 \* 60 \* 1000/);
+  assert.match(importer, /readOrangeMail\(scanSince, 50\)/);
+  assert.match(importer, /bind\(scanStartedAt\)/);
+  assert.doesNotMatch(importer, /catch \(error\)[\s\S]*SET last_run_at = \?, last_error/);
   assert.match(migration, /VALUES \('orange', 1, unixepoch\('now'\) \* 1000/);
   assert.match(settings, /Import automat e-mail/);
   assert.match(settings, /Verifică e-mailurile acum/);
