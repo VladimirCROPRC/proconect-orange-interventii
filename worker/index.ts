@@ -49,7 +49,21 @@ const worker = {
     return response;
   },
   async scheduled(_controller: ScheduledController, _env: Env, ctx: ExecutionContext): Promise<void> {
-    ctx.waitUntil(importOrangeMailTickets().catch((error) => console.error("Orange mail import failed", error instanceof Error ? error.message : "Unknown failure")));
+    ctx.waitUntil((async () => {
+      try {
+        await importOrangeMailTickets();
+      } catch (error) {
+        console.error("Orange mail import failed", error instanceof Error ? error.message : "Unknown failure");
+      }
+      // E-mail import queues the complete OneDrive export as a retry path.
+      // Process one queued job on every cron run, including jobs delayed by a
+      // temporary Excel lock or another Microsoft Graph failure.
+      try {
+        await drainOneDrive();
+      } catch {
+        console.error("OneDrive scheduled processing requires retry");
+      }
+    })());
   },
 };
 

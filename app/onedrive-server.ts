@@ -7,7 +7,7 @@ import { buildMaterialSheetPdf } from "./material-pdf";
 import { buildOrangeQafXlsx } from "./orange-qaf";
 import { buildOrangeKmz } from "./orange-kmz";
 import { parseOrangeMail } from "./orange-mail";
-import { base64url, decode64, fixedOrigin, retryDelay, safeName, usesOneDrive, validMode, workbookTicketRow, type BackupMode } from "./onedrive-core";
+import { base64url, decode64, fixedOrigin, preserveManualWorkbookCells, retryDelay, safeName, usesOneDrive, validMode, workbookTicketRow, type BackupMode, type WorkbookCell } from "./onedrive-core";
 
 type Environment = { PROCONECT_APP_URL?: string; ONEDRIVE_CLIENT_ID?: string; ONEDRIVE_TENANT_ID?: string; ONEDRIVE_CLIENT_SECRET?: string; ONEDRIVE_ENCRYPTION_KEY?: string; ORANGE_TICKETS_WORKBOOK_URL?: string };
 type Connection = { mode: BackupMode; generation: string; access_token: string; refresh_token: string; expires_at: number; drive_id: string; root_id: string; root_url: string; account: string; owner_id: string; lease: string; lease_until: number };
@@ -313,51 +313,94 @@ export async function syncOrangeTicketWorkbook(projectId: string) {
   if (!itemId || !driveId) throw new RemoteFailure("Excel Online: registrul partajat nu a putut fi identificat.");
 
   const workbook = `/drives/${encodeURIComponent(driveId)}/items/${encodeURIComponent(itemId)}/workbook`;
-  const ticketColumn = await graph(token, `${workbook}/tables/Table1/columns/${encodeURIComponent("Ticket ID")}/dataBodyRange?$select=values`);
+  const [ticketColumn, tableRange] = await Promise.all([
+    graph(token, `${workbook}/tables/Table1/columns/${encodeURIComponent("Ticket ID")}/dataBodyRange?$select=values`),
+    graph(token, `${workbook}/tables/Table1/dataBodyRange?$select=values`),
+  ]);
   let existingIndex = -1;
   let targetIndex = -1;
   if (ticketColumn.ok) {
-    const range = await ticketColumn.json() as WorkbookRange;
-    ({ existingIndex, targetIndex } = workbookTicketRow(range.values ?? [], project.id));
+    const [ticketRange, completeRange] = await Promise.all([
+      ticketColumn.json() as Promise<WorkbookRange>,
+      tableRange.ok ? tableRange.json() as Promise<WorkbookRange> : Promise.resolve({ values: [] }),
+    ]);
+    ({ existingIndex, targetIndex } = workbookTicketRow(ticketRange.values ?? [], project.id, completeRange.values ?? []));
   } else if (ticketColumn.status !== 404) {
     await graphJson(ticketColumn);
   }
+  if (!tableRange.ok && tableRange.status !== 404) await graphJson(tableRange);
 
   // Table1 in the existing ENO3 centralizer spans A:AE (31 columns).
   // Microsoft Graph rejects rows whose value count differs from the table width.
-  let values = Array.from({ length: 31 }, () => "") as Array<string | number>;
+  let currentValues = Array.from({ length: 31 }, () => "") as WorkbookCell[];
   if (targetIndex >= 0) {
     const existingRow = await graphJson<WorkbookRange>(await graph(token, `${workbook}/tables/Table1/rows/itemAt(index=${targetIndex})/range?$select=values`));
-    if (existingRow.values?.[0]?.length === 31) values = existingRow.values[0].map((value) => typeof value === "number" ? value : String(value ?? ""));
+    if (existingRow.values?.[0]?.length !== 31) {
+      throw new RemoteFailure("Excel Online: rândul existent nu a putut fi citit integral; sincronizarea a fost oprită pentru a proteja valorile din centralizator.");
+    }
+    currentValues = existingRow.values[0].map((value) => typeof value === "number" ? value : String(value ?? ""));
   }
-  values[1] = project.fo_section_name;
-  values[3] = project.id;
-  values[4] = project.departure_locality;
-  values[5] = project.county;
-  values[6] = documentation?.validatedBy ?? "";
-  values[7] = project.topology;
-  values[8] = project.status === "Finalizat" ? "Raport finalizat" : assessment ? "În lucru" : "Tichet generat";
-  values[9] = project.sla;
-  values[11] = orangeRequestTimestamp(project.scheduled_label, project.created_at);
-  values[12] = project.technician;
-  values[13] = completedBy;
-  values[14] = assessment?.arrivedAt ? bucharestTimestamp(assessment.arrivedAt) : "";
-  values[15] = damageLocation?.placedAt || assessment?.documentedAt ? bucharestTimestamp(damageLocation?.placedAt ?? assessment!.documentedAt!) : "";
-  values[16] = orangeClosingTimestamp(documentation?.validatedAt, documentation?.closingDate, documentation?.closingTime);
-  values[17] = project.cable_capacity;
-  values[18] = incidentDescription;
-  values[20] = "";
-  values[21] = remediationDescription;
-  values[22] = typeof damageLocation?.lat === "number" && typeof damageLocation?.lon === "number" ? `${damageLocation.lat.toFixed(6)}, ${damageLocation.lon.toFixed(6)}` : "";
-  values[23] = "";
+  const desiredValues = [...currentValues];
+  desiredValues[1] = project.fo_section_name;
+  desiredValues[3] = project.id;
+  desiredValues[4] = project.departure_locality;
+  desiredValues[5] = project.county;
+  desiredValues[6] = documentation?.validatedBy ?? "";
+  desiredValues[7] = project.topology;
+  desiredValues[8] = project.status === "Finalizat" ? "Raport finalizat" : assessment ? "În lucru" : "Tichet generat";
+  desiredValues[9] = project.sla;
+  desiredValues[11] = orangeRequestTimestamp(project.scheduled_label, project.created_at);
+  desiredValues[12] = project.technician;
+  desiredValues[13] = completedBy;
+  desiredValues[14] = assessment?.arrivedAt ? bucharestTimestamp(assessment.arrivedAt) : "";
+  desiredValues[15] = damageLocation?.placedAt || assessment?.documentedAt ? bucharestTimestamp(damageLocation?.placedAt ?? assessment!.documentedAt!) : "";
+  desiredValues[16] = orangeClosingTimestamp(documentation?.validatedAt, documentation?.closingDate, documentation?.closingTime);
+  desiredValues[17] = project.cable_capacity;
+  desiredValues[18] = incidentDescription;
+  desiredValues[20] = "";
+  desiredValues[21] = remediationDescription;
+  desiredValues[22] = typeof damageLocation?.lat === "number" && typeof damageLocation?.lon === "number" ? `${damageLocation.lat.toFixed(6)}, ${damageLocation.lon.toFixed(6)}` : "";
+  desiredValues[23] = "";
 
-  const rowPath = targetIndex >= 0 ? `${workbook}/tables/Table1/rows/itemAt(index=${targetIndex})/range` : `${workbook}/tables/Table1/rows/add`;
-  await graphJson(await graph(token, rowPath, {
-    method: targetIndex >= 0 ? "PATCH" : "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(targetIndex >= 0 ? { values: [values] } : { index: null, values: [values] }),
-  }));
-  return { configured: true, written: existingIndex < 0, updated: existingIndex >= 0 };
+  const managedIndexes = [1, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16, 17, 18, 20, 21, 22, 23];
+  const savedState = await getRawDb().prepare("SELECT values_json FROM orange_workbook_sync_state WHERE project_id = ? LIMIT 1")
+    .bind(project.id).first<{ values_json?: string }>();
+  let previousAppValues: Array<WorkbookCell | null> | null = null;
+  try {
+    const parsed = savedState?.values_json ? JSON.parse(savedState.values_json) : null;
+    if (Array.isArray(parsed)) previousAppValues = parsed;
+  } catch { previousAppValues = null; }
+  const merged = preserveManualWorkbookCells(currentValues, desiredValues, previousAppValues, managedIndexes, targetIndex < 0);
+
+  if (targetIndex >= 0) {
+    // Microsoft Graph treats null as "ignore this cell" for range updates.
+    // Sending only changed cells prevents a full-row PATCH from erasing
+    // formulas or values which were not returned reliably by Excel Online.
+    const changedValues = merged.values.map((value, index) => {
+      const applicationIsBlank = managedIndexes.includes(index) && String(desiredValues[index] ?? "").trim() === "";
+      const workbookHasValue = String(currentValues[index] ?? "").trim() !== "";
+      // This is the final write boundary: an empty application field can
+      // never clear a populated Excel cell, for any managed column.
+      if (applicationIsBlank && workbookHasValue) return null;
+      return String(value ?? "") === String(currentValues[index] ?? "") ? null : value;
+    });
+    if (changedValues.some((value) => value !== null)) {
+      await graphJson(await graph(token, `${workbook}/tables/Table1/rows/itemAt(index=${targetIndex})/range`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ values: [changedValues] }),
+      }));
+    }
+  } else {
+    await graphJson(await graph(token, `${workbook}/tables/Table1/rows/add`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ index: null, values: [merged.values] }),
+    }));
+  }
+  await getRawDb().prepare("INSERT INTO orange_workbook_sync_state (project_id, values_json, updated_at) VALUES (?, ?, ?) ON CONFLICT(project_id) DO UPDATE SET values_json = excluded.values_json, updated_at = excluded.updated_at")
+    .bind(project.id, JSON.stringify(merged.appValues), Date.now()).run();
+  return { configured: true, written: existingIndex < 0, updated: existingIndex >= 0, protectedCells: merged.protectedIndexes.length };
 }
 
 async function tokenFor(c: Connection) {

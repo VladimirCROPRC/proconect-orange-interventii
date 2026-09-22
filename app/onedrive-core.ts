@@ -29,10 +29,56 @@ export function fixedOrigin(value: string) {
   return url.origin;
 }
 
-export function workbookTicketRow(rows: unknown[][], ticketId: string) {
+export function workbookTicketRow(ticketRows: unknown[][], ticketId: string, fullRows: unknown[][] = ticketRows) {
   const normalizedTicket = ticketId.trim().toUpperCase();
-  const existingIndex = rows.findIndex((row) => String(row[0] ?? "").trim().toUpperCase() === normalizedTicket);
+  const existingIndex = ticketRows.findIndex((row) => String(row[0] ?? "").trim().toUpperCase() === normalizedTicket);
   if (existingIndex >= 0) return { existingIndex, targetIndex: existingIndex };
-  const emptyIndex = rows.findIndex((row) => !String(row[0] ?? "").trim());
+  // A blank Ticket ID does not mean that the row is unused. Some historical
+  // entries have a missing ID but valid data in other columns.
+  const emptyIndex = fullRows.findIndex((row) => row.every((value) => !String(value ?? "").trim()));
   return { existingIndex: -1, targetIndex: emptyIndex };
+}
+
+export type WorkbookCell = string | number;
+
+function blankWorkbookCell(value: unknown) {
+  return String(value ?? "").trim() === "";
+}
+
+function sameWorkbookCell(first: unknown, second: unknown) {
+  return String(first ?? "") === String(second ?? "");
+}
+
+export function preserveManualWorkbookCells(
+  current: WorkbookCell[],
+  desired: WorkbookCell[],
+  previousAppValues: Array<WorkbookCell | null> | null,
+  managedIndexes: number[],
+  newRow: boolean,
+) {
+  const values = [...current];
+  const appValues: Array<WorkbookCell | null> = previousAppValues
+    ? Array.from({ length: desired.length }, (_, index) => previousAppValues[index] ?? null)
+    : Array.from({ length: desired.length }, () => null);
+  const protectedIndexes: number[] = [];
+
+  for (const index of managedIndexes) {
+    const currentValue = current[index] ?? "";
+    const desiredValue = desired[index] ?? "";
+    const previousValue = previousAppValues?.[index] ?? null;
+    // Missing application data must never erase an existing workbook value,
+    // regardless of whether that value was written manually or by a previous
+    // synchronization.
+    const wouldClearExistingValue = blankWorkbookCell(desiredValue) && !blankWorkbookCell(currentValue);
+    const mayWrite = !wouldClearExistingValue && (newRow
+      || blankWorkbookCell(currentValue)
+      || (previousValue !== null && sameWorkbookCell(currentValue, previousValue)));
+    if (mayWrite) {
+      values[index] = desiredValue;
+      appValues[index] = desiredValue;
+    } else {
+      protectedIndexes.push(index);
+    }
+  }
+  return { values, appValues, protectedIndexes };
 }
