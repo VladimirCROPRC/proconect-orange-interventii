@@ -56,3 +56,26 @@ export function OroLookup({ name, defaultValue = "", label, kinds = ["site"], pl
     </button>)}</div>}
   </div>;
 }
+
+export function OroSiteMapLink({ siteCode }: { siteCode?: string }) {
+  const [site, setSite] = useState<OroLookupResult | null>(null);
+
+  useEffect(() => {
+    const query = siteCode?.trim() ?? "";
+    setSite(null);
+    if (!query) return;
+    const controller = new AbortController();
+    void fetch(`/api/oro?type=site&q=${encodeURIComponent(query)}`, { signal: controller.signal, cache: "no-store" })
+      .then(async (response) => response.ok ? response.json() as Promise<{ results?: OroLookupResult[] }> : { results: [] })
+      .then((payload) => {
+        const exactSite = payload.results?.find((result) => result.kind === "site" && result.code.trim().toLocaleLowerCase("ro") === query.toLocaleLowerCase("ro"));
+        if (!controller.signal.aborted) setSite(exactSite ?? null);
+      })
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, [siteCode]);
+
+  if (!site) return null;
+  const coordinates = `${site.lat.toFixed(6)},${site.lon.toFixed(6)}`;
+  return <a className="oro-site-map-link" href={`https://www.google.com/maps/search/?api=1&query=${coordinates}`} target="_blank" rel="noreferrer">Deschide în Google Maps ↗</a>;
+}

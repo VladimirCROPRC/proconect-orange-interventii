@@ -4,6 +4,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { deleteProjectFile, fetchProjectFiles, formatCapturedAt, uploadProjectFile, type StoredProjectFile } from "./client-storage";
 import { InterventionExecutionSection } from "./intervention-execution";
 import { DamageLocationPicker } from "./damage-location-picker";
+import { OroSiteMapLink } from "./oro-lookup";
 import { orangeMaterials, proconectMaterials } from "./orange-materials";
 import { orangeServicePackages } from "./orange-services";
 import type { InterventionCause, InterventionDamageType, InterventionExecutionActivity, InterventionFieldSummary, InterventionMaterialSelection } from "./field-documentation";
@@ -469,7 +470,7 @@ export function InterventionOperationsSection({
           <div className="card-heading"><div><h2>Cerințele intervenției</h2><p>Informațiile transmise tehnicianului pentru această lucrare.</p></div></div>
           <div className="activity-brief-content"><p>{project.requirements}</p></div>
           <div className="activity-contact-grid">
-            {orangeIntervention ? <><div><small>COD SITE A</small><strong>{project.client}</strong></div><div><small>COD SITE B</small><strong>{project.address || "Nu este specificat"}</strong></div></> : <><div><small>LOCAȚIE</small><strong>{project.address}</strong></div><div><small>PERSOANĂ DE CONTACT</small><strong>{project.contact}</strong><span>{project.phone}</span></div></>}
+            {orangeIntervention ? <><div><small>COD SITE A</small><strong>{project.client}</strong><OroSiteMapLink siteCode={project.client} /></div><div><small>COD SITE B</small><strong>{project.address || "Nu este specificat"}</strong><OroSiteMapLink siteCode={project.address} /></div></> : <><div><small>LOCAȚIE</small><strong>{project.address}</strong></div><div><small>PERSOANĂ DE CONTACT</small><strong>{project.contact}</strong><span>{project.phone}</span></div></>}
           </div>
         </section>
 

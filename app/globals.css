@@ -9172,6 +9172,19 @@ td > small {
   font-size: 14px;
 }
 
+.oro-site-map-link {
+  color: #3b4984;
+  font-size: 12px;
+  font-weight: 750;
+  text-decoration: none;
+}
+
+.oro-site-map-link:hover,
+.oro-site-map-link:focus-visible {
+  color: #ef6c00;
+  text-decoration: underline;
+}
+
 .activity-assignment-content {
   display: grid;
   gap: 20px;
