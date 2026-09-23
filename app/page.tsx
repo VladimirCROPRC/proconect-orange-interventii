@@ -8,6 +8,7 @@ import { InterventionOperationsSection } from "./intervention-operations";
 import { ProjectDocumentsSection } from "./project-documents";
 import { GoogleDriveSettings, type GoogleDriveStatus } from "./google-drive-settings";
 import { OneDriveSettings } from "./onedrive-settings";
+import { OroLookup } from "./oro-lookup";
 import { MaterialInventory } from "./material-inventory";
 import { MonthlyReports } from "./monthly-reports";
 import { TechnicianMap } from "./technician-map";
@@ -1700,12 +1701,16 @@ export default function Home() {
                 ) : (
                   <label><span>Request ID *</span><div className="prefix-input"><b>RID</b><input name="requestId" required readOnly={Boolean(editingProject)} defaultValue={editingProject?.id.replace(/^RID/i, "")} inputMode="numeric" /></div></label>
                 )}
-                <label><span>{isOrangeForm ? "Cod site A" : "Nume client *"}</span><input name="client" required={!isOrangeForm} defaultValue={editingProject?.client} /></label>
+                {isOrangeForm
+                  ? <div className="oro-form-field"><OroLookup name="client" label="Cod site A" defaultValue={editingProject?.client} placeholder="Caută un site ORO" /></div>
+                  : <label><span>Nume client *</span><input name="client" required defaultValue={editingProject?.client} /></label>}
                 {!editingProject && !isOrangeForm && <>
                   <label><span>Cod site (opțional)</span><input name="siteCode" maxLength={100} /></label>
                   <label><span>Client LEC (opțional)</span><input name="lec" maxLength={100} /></label>
                 </>}
-                <label className="wide"><span>{isOrangeForm ? "Cod site B (opțional)" : isInstallationForm ? "Adresă instalare *" : "Adresă lucrare *"}</span><input name="address" required={!isOrangeForm} defaultValue={editingProject?.address} /></label>
+                {isOrangeForm
+                  ? <div className="wide oro-form-field"><OroLookup name="address" label="Cod site B (opțional)" defaultValue={editingProject?.address} placeholder="Caută un site ORO" /></div>
+                  : <label className="wide"><span>{isInstallationForm ? "Adresă instalare *" : "Adresă lucrare *"}</span><input name="address" required defaultValue={editingProject?.address} /></label>}
                 {isOrangeForm && <>
                   {!editingProject && <label><span>Data și ora solicitării intervenției</span><input type="datetime-local" name="requestDate" step="60" /></label>}
                   <label className="wide"><span>Denumirea tronsonului FO</span><input name="foSectionName" maxLength={200} defaultValue={editingProject?.foSectionName ?? ""} /></label>

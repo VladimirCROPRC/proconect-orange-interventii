@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, type MouseEvent } from "react";
+import { OroLookup, type OroLookupResult } from "./oro-lookup";
 
 type Coordinate = { lat: number; lon: number };
 type Props = {
@@ -77,6 +78,13 @@ export function DamageLocationPicker({ value, onChange, onNotify }: Props) {
     }, { enableHighAccuracy: true, timeout: 15_000 });
   }
 
+  function chooseOro(result: OroLookupResult) {
+    const location = { lat: result.lat, lon: result.lon };
+    setCenter(location);
+    setZoom(18);
+    onNotify(`${result.kind === "site" ? "Site-ul" : "Joncțiunea"} ${result.code} a fost localizat(ă). Selectează manual pe hartă punctul avariei.`);
+  }
+
   const marker = value ? (() => {
     const point = project(value, zoom);
     const base = project(center, zoom);
@@ -84,7 +92,8 @@ export function DamageLocationPicker({ value, onChange, onNotify }: Props) {
   })() : null;
 
   return <section className="project-card">
-    <div className="card-heading"><div><h2>Locația avariei</h2><p>Atinge poziția avariei pe hartă sau folosește locația curentă.</p></div></div>
+    <div className="card-heading"><div><h2>Locația avariei</h2><p>Caută în ORO pentru a orienta harta, apoi atinge manual poziția exactă a avariei.</p></div></div>
+    <div className="oro-damage-search"><OroLookup kinds={["site", "junction"]} placeholder="Cod site sau ORO Alias" onSelect={chooseOro} /></div>
     <div role="application" aria-label="Hartă pentru amplasarea avariei" onClick={place} style={{ position: "relative", height: 320, overflow: "hidden", cursor: "crosshair", background: "#dce4e8" }}>
       {tiles.map((tile) => <img key={tile.key} src={`https://tile.openstreetmap.org/${zoom}/${tile.urlX}/${tile.urlY}.png`} alt="" draggable={false} style={{ position: "absolute", left: `${tile.x / WIDTH * 100}%`, top: `${tile.y / HEIGHT * 100}%`, width: `${TILE / WIDTH * 100}%`, height: `${TILE / HEIGHT * 100}%` }} />)}
       {marker && <span style={{ position: "absolute", left: `${marker.left}%`, top: `${marker.top}%`, width: 22, height: 22, borderRadius: "50%", background: "#e5484d", border: "4px solid white", boxShadow: "0 2px 8px #0008", transform: "translate(-50%, -50%)" }} />}

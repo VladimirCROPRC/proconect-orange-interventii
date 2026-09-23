@@ -4326,6 +4326,117 @@ td > small {
   grid-column: 1 / -1;
 }
 
+.oro-form-field,
+.oro-lookup {
+  min-width: 0;
+}
+
+.oro-lookup {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.oro-lookup > span {
+  color: #59655e;
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.oro-lookup-types {
+  display: flex;
+  gap: 5px;
+}
+
+.oro-lookup-types button {
+  padding: 5px 10px;
+  border: 1px solid #dfe6e2;
+  border-radius: 999px;
+  color: #59655e;
+  background: #fff;
+  font-size: 11px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.oro-lookup-types button.active {
+  border-color: #ef7b2d;
+  color: #9b4309;
+  background: #fff2e8;
+}
+
+.oro-lookup-error {
+  color: #b42318;
+}
+
+.oro-lookup-results {
+  position: absolute;
+  z-index: 30;
+  top: 100%;
+  right: 0;
+  left: 0;
+  max-height: 260px;
+  overflow: auto;
+  border: 1px solid #dfe6e2;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 12px 30px rgba(31, 42, 82, .18);
+}
+
+.oro-lookup-results button {
+  display: grid;
+  width: 100%;
+  grid-template-columns: minmax(90px, auto) 1fr auto;
+  gap: 3px 10px;
+  padding: 10px 12px;
+  border: 0;
+  border-bottom: 1px solid #edf0ee;
+  text-align: left;
+  color: #344139;
+  background: #fff;
+  cursor: pointer;
+}
+
+.oro-lookup-results button:hover,
+.oro-lookup-results button:focus-visible {
+  background: #fff7f0;
+}
+
+.oro-lookup-results button > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.oro-lookup-results button small {
+  color: #7c8781;
+}
+
+.oro-lookup-results button em {
+  grid-column: 2 / -1;
+  color: #7c8781;
+  font-size: 10px;
+  font-style: normal;
+}
+
+.oro-damage-search {
+  position: relative;
+  z-index: 2;
+  padding: 0 20px 16px;
+}
+
+.oro-damage-search .oro-lookup > input {
+  width: 100%;
+  height: 40px;
+  padding: 0 11px;
+  border: 1px solid #dfe6e2;
+  border-radius: 8px;
+  outline: 0;
+  color: #344139;
+  background: #fff;
+}
+
 .prefix-input {
   display: flex;
 }
