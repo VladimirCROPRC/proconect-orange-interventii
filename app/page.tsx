@@ -1334,6 +1334,7 @@ export default function Home() {
                 <strong>{activeProject.id}</strong>
                 <small><i />{activeProject.status}</small>
               </div>
+              <a className="mobile-work-portal" href="https://portal.proconect.online" target="_blank" rel="noopener noreferrer" aria-label="Portal PRO APPS">Portal PRO APPS</a>
               <button className="mobile-work-logout" onClick={handleSignOut} aria-label="Deconectare" title="Deconectare">⎋</button>
             </div>
           )}
@@ -1343,6 +1344,7 @@ export default function Home() {
           </button>
           <div className="breadcrumb"><span>{isProjectView ? `${activitySections[listViewForActivity(activeProject.activityType)].title} · ${activeProject.id}` : isActivityListView ? "Activități" : "Management"}</span><b>/</b><strong>{view === "projects" ? "Instalări" : view === "interventions" ? "Intervenții" : view === "orange-interventions" ? "Intervenții Orange" : view === "surveys" ? "Survey" : view === "intervention-workspace" ? "Constatare" : view === "intervention-execution" ? "Execuție" : view === "intervention-documentation" ? "Documentare" : view === "survey-workspace" ? "Fișa survey" : view === "team" ? "Echipă" : view === "cpe" ? "Echipamente CPE" : view === "drive" ? "Administrare" : view === "materials" ? "Materiale" : view === "reports" ? "Rapoarte lunare" : view === "map" ? "Hartă" : view === "client" ? "Client" : view === "route" ? "Traseu FO" : view === "splices" ? "Suduri FO" : view === "documents" ? "Documente" : "Operațiuni site"}</strong></div>
           <div className="top-actions">
+            <a className="portal-apps-button" href="https://portal.proconect.online" target="_blank" rel="noopener noreferrer">Portal PRO APPS</a>
             <button className="help-button" aria-label="Ajutor">?</button>
             <button className="bell" aria-label="Notificări">●<span>3</span></button>
             <div className="top-profile"><span className="avatar avatar-green">{initials(displayedAccountName)}</span><div><strong>{displayedAccountName}</strong><small>{displayedAccountRole}</small></div></div>
