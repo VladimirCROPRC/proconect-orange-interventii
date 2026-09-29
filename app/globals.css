@@ -11849,3 +11849,52 @@ td > small {
 .inventory-movement div{display:flex;flex-direction:column;gap:3px}
 .inventory-movement span,.inventory-movement small{color:#71809a}
 @media(max-width:900px){.inventory-page{padding:24px 16px 60px}.inventory-grid{grid-template-columns:1fr}.inventory-form-row{grid-template-columns:1fr}.inventory-table{overflow-x:auto}.inventory-table-row{min-width:720px}.inventory-movement{grid-template-columns:1fr}.inventory-page .page-heading{flex-direction:column}}
+
+/* Shared navigation shortcut to the PRO APPS portal. */
+.portal-apps-button,
+.mobile-work-portal {
+  display: inline-flex;
+  min-height: 35px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12px;
+  border: 1px solid #d8def0;
+  border-radius: 10px;
+  color: #25376f;
+  background: #f4f6ff;
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: .025em;
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: border-color .18s ease, background .18s ease, transform .18s ease;
+}
+
+.portal-apps-button:hover,
+.portal-apps-button:focus-visible {
+  border-color: #9ba8d1;
+  background: #e9edff;
+  transform: translateY(-1px);
+}
+
+@media (max-width: 820px) {
+  .portal-apps-button {
+    min-height: 34px;
+    padding: 0 9px;
+    font-size: 10px;
+  }
+
+  .project-mobile-topbar .mobile-work-header {
+    grid-template-columns: 34px 56px minmax(0, 1fr) auto 38px;
+  }
+
+  .mobile-work-portal {
+    min-height: 34px;
+    padding: 0 8px;
+    border-color: rgba(255, 255, 255, .34);
+    color: #fff;
+    background: rgba(255, 255, 255, .12);
+    font-size: 9px;
+  }
+}
