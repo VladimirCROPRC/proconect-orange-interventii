@@ -78,12 +78,35 @@ export async function DELETE(request: Request) {
     if (!session || session.account.passwordResetRequired) return Response.json({ error: "Autentificare necesară." }, { status: 401 });
     if (!isManagementRole(session.account)) return Response.json({ error: "Nu ai permisiunea de a șterge proiecte." }, { status: 403 });
 
-    const body = (await request.json()) as { projectId?: unknown };
-    if (typeof body.projectId !== "string") return Response.json({ error: "Identificatorul proiectului lipsește." }, { status: 400 });
+    const body = (await request.json()) as { projectId?: unknown; projectIds?: unknown };
+    const isBulkRequest = Array.isArray(body.projectIds);
+    const requestedIds = isBulkRequest ? body.projectIds : [body.projectId];
+    if (!requestedIds.length || requestedIds.length > 50 || requestedIds.some((projectId) => typeof projectId !== "string")) {
+      return Response.json({ error: "Selectează între 1 și 50 de proiecte pentru ștergere." }, { status: 400 });
+    }
+    const projectIds = Array.from(new Set((requestedIds as string[]).map((projectId) => projectId.trim().toUpperCase()).filter(Boolean)));
+    if (!projectIds.length) return Response.json({ error: "Identificatorul proiectului lipsește." }, { status: 400 });
 
-    const result = await deleteProject(body.projectId);
-    if ("error" in result) return Response.json({ error: result.error }, { status: result.status });
-    return Response.json(result);
+    if (!isBulkRequest) {
+      const result = await deleteProject(projectIds[0]);
+      if ("error" in result) return Response.json({ error: result.error }, { status: result.status });
+      return Response.json(result);
+    }
+
+    const deletedIds: string[] = [];
+    const failures: Array<{ projectId: string; error: string }> = [];
+    let cleanupFailures = 0;
+    for (const projectId of projectIds) {
+      const result = await deleteProject(projectId);
+      if ("error" in result) {
+        failures.push({ projectId, error: result.error });
+      } else {
+        deletedIds.push(result.projectId);
+        cleanupFailures += result.cleanupFailures;
+      }
+    }
+
+    return Response.json({ deletedIds, cleanupFailures, failures }, { status: deletedIds.length ? 200 : 400 });
   } catch (error) {
     console.error("Proconect project deletion error:", error instanceof Error ? error.message : "Unknown project deletion failure");
     return Response.json({ error: "Proiectul nu a putut fi șters." }, { status: 503 });
