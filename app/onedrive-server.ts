@@ -570,10 +570,8 @@ async function uploadJob(c: Connection, job: Job) {
     if (activity === "Intervenție Orange") {
       // Ignore legacy/demo rows that predate the Orange-only ticket guard.
       if (!validOrangeTicketId(job.item_id)) return;
-      // Keep the operational register current before generating the heavier
-      // QAF/KMZ exports. If a document export reaches the Worker CPU limit,
-      // the centralizer row has already been inserted or updated.
-      await syncOrangeTicketWorkbook(job.item_id);
+      // The operational centralizer is intentionally outside the OneDrive
+      // export flow. This job creates only folders, QAF, KMZ and file targets.
       const projectFolder = await orangeProjectDestination(token, c.root_id, job.item_id);
       const qaf = await buildOrangeQafXlsx(job.item_id);
       const shortTicket = shortOrangeTicket(job.item_id);
