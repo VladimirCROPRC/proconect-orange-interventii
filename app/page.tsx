@@ -1,4 +1,5 @@
 "use client";
+import { readDocumentationResponse } from "./documentation-response";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { FoRouteSection } from "./fo-route-map";
@@ -1066,7 +1067,7 @@ export default function Home() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ projectId, section, content }),
     });
-    const payload = (await response.json()) as { documentation?: ProjectFieldDocumentation; project?: Project; error?: string };
+    const payload = await readDocumentationResponse<{ documentation?: ProjectFieldDocumentation; project?: Project; error?: string }>(response);
     if (!response.ok || !payload.documentation) throw new Error(payload.error || "Documentația nu a putut fi salvată.");
     setFieldDocumentation((current) => ({ ...current, [projectId]: payload.documentation! }));
     if (payload.project) {
