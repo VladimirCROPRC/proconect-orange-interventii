@@ -570,6 +570,10 @@ async function uploadJob(c: Connection, job: Job) {
     if (activity === "Intervenție Orange") {
       // Ignore legacy/demo rows that predate the Orange-only ticket guard.
       if (!validOrangeTicketId(job.item_id)) return;
+      // Keep the operational register current before generating the heavier
+      // QAF/KMZ exports. If a document export reaches the Worker CPU limit,
+      // the centralizer row has already been inserted or updated.
+      await syncOrangeTicketWorkbook(job.item_id);
       const projectFolder = await orangeProjectDestination(token, c.root_id, job.item_id);
       const qaf = await buildOrangeQafXlsx(job.item_id);
       const shortTicket = shortOrangeTicket(job.item_id);
@@ -592,9 +596,6 @@ async function uploadJob(c: Connection, job: Job) {
         if (!(error instanceof Error) || !error.message.includes("Documentarea intervenției nu este disponibilă")) throw error;
       }
       await folder(token, projectFolder.id, shortTicket);
-      // Update the centralizer last. A workbook failure must not prevent the
-      // QAF, KMZ and photo destination from reaching OneDrive.
-      await syncOrangeTicketWorkbook(job.item_id);
       return;
     }
     const activityFolder = await folder(token, c.root_id, oneDriveActivityFolders[activity]);
