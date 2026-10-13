@@ -75,10 +75,12 @@ async function loadPhoto(file: File): Promise<{
 async function stampFieldPhoto(file: File, geo: string, capturedAt: number) {
   const source = await loadPhoto(file);
   const canvas = document.createElement("canvas");
-  const longestSide = Math.max(source.width, source.height);
-  // Mobile camera files can exceed the request-body limit before reaching the Worker.
-  // 2048 px retains enough detail for field evidence while keeping uploads reliable.
-  const scale = Math.min(1, 2048 / longestSide);
+  // Keep field photos within 1024 × 768 in landscape or 768 × 1024 in portrait.
+  // The aspect ratio is preserved and smaller photographs are never enlarged.
+  const isLandscape = source.width >= source.height;
+  const maximumWidth = isLandscape ? 1024 : 768;
+  const maximumHeight = isLandscape ? 768 : 1024;
+  const scale = Math.min(1, maximumWidth / source.width, maximumHeight / source.height);
   canvas.width = Math.max(1, Math.round(source.width * scale));
   canvas.height = Math.max(1, Math.round(source.height * scale));
 
