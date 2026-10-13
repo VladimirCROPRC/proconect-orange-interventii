@@ -1,5 +1,5 @@
 import * as google from "./google-drive-server";
-import { backupMode, deleteOneDriveFileCopy, queueOneDrive } from "./onedrive-server";
+import { backupMode, deleteOneDriveFileCopy, queueOneDrive, syncOrangeTicketWorkbook } from "./onedrive-server";
 import { usesGoogle } from "./onedrive-core";
 import { getFileRow } from "./project-server";
 
@@ -14,20 +14,22 @@ async function both(kind: "file" | "project", id: string, googleSync: () => Prom
 }
 export async function syncProjectIfConnected(id: string) {
   const mode = await backupMode();
-  // The operational centralizer is maintained outside this synchronization.
-  // Queue only the OneDrive project export (folders, QAF and KMZ).
+  // Update the centralizer immediately and keep the project export queued for
+  // folders, QAF and KMZ. The optimized workbook lookup reads only Ticket ID.
   const outcomes = await Promise.allSettled([
     queueOneDrive("project", id),
+    syncOrangeTicketWorkbook(id),
     usesGoogle(mode) ? google.syncProjectIfConnected(id) : Promise.resolve(),
   ]);
   for (const result of outcomes) if (result.status === "rejected") console.error("Project synchronization requires retry");
 }
 export async function syncReportIfConnected(id: string) {
   const mode = await backupMode();
-  // Field actions queue only document regeneration. The operational
-  // centralizer is never read or written by this application.
+  // Field actions update the centralizer immediately and queue QAF/KMZ
+  // regeneration as a separate, retryable export.
   const outcomes = await Promise.allSettled([
     queueOneDrive("project", id),
+    syncOrangeTicketWorkbook(id),
     usesGoogle(mode) ? google.syncReportIfConnected(id) : Promise.resolve(),
   ]);
   for (const result of outcomes) if (result.status === "rejected") console.error("Drive report refresh requires retry");
