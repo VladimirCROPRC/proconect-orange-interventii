@@ -23,7 +23,7 @@ import { orangeCounties } from "./orange-counties";
 
 type View = "projects" | "interventions" | "orange-interventions" | "surveys" | "map" | "intervention-workspace" | "intervention-execution" | "intervention-documentation" | "survey-workspace" | "team" | "cpe" | "drive" | "materials" | "reports" | "documents" | "client" | "route" | "splices" | "site";
 type ActivityListView = "projects" | "interventions" | "orange-interventions" | "surveys";
-type Modal = "project" | "edit-project" | "delete-project" | "account" | "cpe" | "edit-cpe" | null;
+type Modal = "project" | "edit-project" | "delete-project" | "delete-projects" | "account" | "cpe" | "edit-cpe" | null;
 type ServiceType = "Internet" | "VPN" | "Internet+OL" | "OL";
 type ClientPhotoKey = "report" | "speed" | "olTest" | "overview" | "detail" | "labels" | "grounding";
 
@@ -184,6 +184,9 @@ export default function Home() {
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [deletingProject, setDeletingProject] = useState<Project | null>(null);
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([]);
+  const [bulkDeletingProjects, setBulkDeletingProjects] = useState<Project[]>([]);
+  const [bulkDeleteConfirmation, setBulkDeleteConfirmation] = useState("");
   const [projectDeleting, setProjectDeleting] = useState(false);
   const [editingCpe, setEditingCpe] = useState("");
   const [editingCpeRequiresGrounding, setEditingCpeRequiresGrounding] = useState(false);
@@ -633,6 +636,8 @@ export default function Home() {
     setEditingProject(null);
     setDeletingProject(null);
     setDeleteConfirmation("");
+    setBulkDeletingProjects([]);
+    setBulkDeleteConfirmation("");
     setEditingCpe("");
     setEditingCpeRequiresGrounding(false);
     setMcSelected(false);
@@ -664,6 +669,28 @@ export default function Home() {
     setDeletingProject(project);
     setDeleteConfirmation("");
     setModal("delete-project");
+  }
+
+  function toggleProjectSelection(projectId: string) {
+    setSelectedProjectIds((current) => current.includes(projectId)
+      ? current.filter((id) => id !== projectId)
+      : [...current, projectId]);
+  }
+
+  function toggleVisibleProjectSelection() {
+    const visibleIds = filteredProjects.map((project) => project.id);
+    const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedProjectIds.includes(id));
+    setSelectedProjectIds((current) => allVisibleSelected
+      ? current.filter((id) => !visibleIds.includes(id))
+      : Array.from(new Set([...current, ...visibleIds])));
+  }
+
+  function openBulkProjectDeletion() {
+    const selectedProjects = currentActivityProjects.filter((project) => selectedProjectIds.includes(project.id));
+    if (!selectedProjects.length) return;
+    setBulkDeletingProjects(selectedProjects);
+    setBulkDeleteConfirmation("");
+    setModal("delete-projects");
   }
 
   async function createProject(event: FormEvent<HTMLFormElement>) {
@@ -837,6 +864,7 @@ export default function Home() {
       const deletedId = payload.projectId;
       const remainingProjects = projects.filter((project) => project.id !== deletedId);
       setProjects(remainingProjects);
+      setSelectedProjectIds((current) => current.filter((id) => id !== deletedId));
       setFieldDocumentation((current) => {
         const next = { ...current };
         delete next[deletedId];
@@ -875,6 +903,71 @@ export default function Home() {
         : `${deletedId} și documentația sa au fost șterse definitiv.`);
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Proiectul nu a putut fi șters.");
+    } finally {
+      setProjectDeleting(false);
+    }
+  }
+
+  async function removeSelectedProjects(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!bulkDeletingProjects.length || bulkDeleteConfirmation.trim().toUpperCase() !== "STERGE" || projectDeleting) return;
+
+    const projectIds = bulkDeletingProjects.map((project) => project.id);
+    setProjectDeleting(true);
+    try {
+      const response = await fetch("/api/projects", {
+        method: "DELETE",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectIds }),
+      });
+      const payload = (await response.json()) as {
+        deletedIds?: string[];
+        cleanupFailures?: number;
+        failures?: Array<{ projectId: string; error: string }>;
+        error?: string;
+      };
+      if ((!response.ok && !payload.deletedIds?.length) || !payload.deletedIds) {
+        throw new Error(payload.error || "Tichetele nu au putut fi șterse.");
+      }
+
+      const deletedIds = new Set(payload.deletedIds);
+      const deletedProjects = bulkDeletingProjects.filter((project) => deletedIds.has(project.id));
+      const remainingProjects = projects.filter((project) => !deletedIds.has(project.id));
+      setProjects(remainingProjects);
+      setSelectedProjectIds((current) => current.filter((id) => !deletedIds.has(id)));
+      setFieldDocumentation((current) => {
+        const next = { ...current };
+        for (const projectId of deletedIds) delete next[projectId];
+        return next;
+      });
+      setSafetyChecks((current) => {
+        const next = { ...current };
+        for (const projectId of deletedIds) delete next[projectId];
+        return next;
+      });
+      setAccounts((current) => current.map((account) => {
+        const removedJobs = deletedProjects.filter((project) => (project.technicians ?? [project.technician]).includes(account.name)).length;
+        return removedJobs ? { ...account, jobs: Math.max(0, account.jobs - removedJobs) } : account;
+      }));
+
+      if (deletedIds.has(activeProjectId) || !remainingProjects.length) {
+        const nextProject = remainingProjects[0];
+        setActiveProjectId(nextProject?.id ?? "");
+        setClientService(nextProject ? fieldDocumentation[nextProject.id]?.client?.service ?? "Internet" : "Internet");
+        setClientPhotos({});
+      }
+      setSelected(null);
+      closeModal();
+
+      const failedCount = payload.failures?.length ?? 0;
+      showToast(failedCount
+        ? `${deletedIds.size} tichete au fost șterse, iar ${failedCount} nu au putut fi șterse.`
+        : payload.cleanupFailures
+          ? `${deletedIds.size} tichete au fost șterse; unele fișiere necesită curățare tehnică.`
+          : `${deletedIds.size} tichete și documentațiile lor au fost șterse definitiv.`);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Tichetele nu au putut fi șterse.");
     } finally {
       setProjectDeleting(false);
     }
@@ -1419,6 +1512,7 @@ export default function Home() {
               <div className="toolbar">
                 <label className="search-box"><span>⌕</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Caută după tichet, site, tehnician..." /></label>
                 <div className="filters">
+                  {canManageDocuments && selectedProjectIds.length > 0 && <button style={{ color: "#b42336", borderColor: "#ecc8cc" }} onClick={openBulkProjectDeletion}>Șterge selecția ({selectedProjectIds.length})</button>}
                   <select value={filter} onChange={(event) => setFilter(event.target.value)} aria-label="Filtru status">
                     <option>Toate statusurile</option><option>Planificat</option><option>În desfășurare</option><option>De verificat</option><option>Finalizat</option>
                   </select>
@@ -1428,10 +1522,11 @@ export default function Home() {
 
               <div className="table-wrap">
                 <table>
-                  <thead><tr><th>{currentListView === "interventions" || currentListView === "orange-interventions" ? "NUMĂR TICHET" : "REQUEST ID"}</th><th>{currentListView === "orange-interventions" ? "SITE A / SITE B" : "CLIENT / ADRESĂ"}</th><th>TEHNICIENI</th><th>STATUS</th><th>PROGRAMARE</th><th /></tr></thead>
+                  <thead><tr>{canManageDocuments && <th style={{ width: "44px" }}><input type="checkbox" aria-label="Selectează toate tichetele afișate" checked={filteredProjects.length > 0 && filteredProjects.every((project) => selectedProjectIds.includes(project.id))} onChange={toggleVisibleProjectSelection} /></th>}<th>{currentListView === "interventions" || currentListView === "orange-interventions" ? "NUMĂR TICHET" : "REQUEST ID"}</th><th>{currentListView === "orange-interventions" ? "SITE A / SITE B" : "CLIENT / ADRESĂ"}</th><th>TEHNICIENI</th><th>STATUS</th><th>PROGRAMARE</th><th /></tr></thead>
                   <tbody>
                     {filteredProjects.map((project) => (
                       <tr className={project.id === activeProject.id ? "active-project-row" : ""} key={project.id} onClick={() => setSelected(project)} tabIndex={0} onKeyDown={(event) => event.key === "Enter" && setSelected(project)}>
+                        {canManageDocuments && <td><input type="checkbox" aria-label={`Selectează ${project.id}`} checked={selectedProjectIds.includes(project.id)} onClick={(event) => event.stopPropagation()} onChange={() => toggleProjectSelection(project.id)} /></td>}
                         <td><strong className="rid">{project.id}</strong>{project.activityType === "Intervenție" && <small>{project.orderNumber ? `Comandă: ${project.orderNumber}` : "Fără număr de comandă"}</small>}<small>{currentAccount.role === "Tehnician" && project.activityType !== "Intervenție Orange" ? safetyChecks[project.id]?.completed ? "Pretask și EIP completate" : "🔒 Pretask și EIP necesare" : project.id === activeProject.id ? project.activityType === "Intervenție" ? "Tichet activ" : "Proiect activ" : "Salvat permanent"}</small></td>
                         <td><strong>{project.client}</strong><small>{project.address || (project.activityType === "Intervenție Orange" ? "Fără site B" : "")}</small></td>
                         <td><div className="technician"><span className="avatar">{initials(project.technician)}</span><strong>{project.technician}</strong></div></td>
@@ -1760,6 +1855,17 @@ export default function Home() {
               <small>Dosarul existent în Google Drive este păstrat ca arhivă.</small>
             </div>
             <div className="modal-actions"><button type="button" className="secondary-button" onClick={closeModal} disabled={projectDeleting}>Anulează</button><button className="primary-button" style={{ background: "#b42336", borderColor: "#b42336" }} type="submit" disabled={projectDeleting || deleteConfirmation.trim() !== deletingProject.id}>{projectDeleting ? "Se șterge..." : "Șterge definitiv"}</button></div>
+          </form>
+        )}
+        {modal === "delete-projects" && bulkDeletingProjects.length > 0 && (
+          <form className="modal small-modal" onSubmit={removeSelectedProjects}>
+            <div className="modal-head"><div><span className="modal-kicker">ȘTERGERE MULTIPLĂ DEFINITIVĂ</span><h2>Șterge {bulkDeletingProjects.length} tichete</h2><p>{bulkDeletingProjects.map((project) => project.id).join(", ")}</p></div><button type="button" onClick={closeModal} aria-label="Închide" disabled={projectDeleting}>×</button></div>
+            <div className="modal-body stacked-form">
+              <div className="info-note" style={{ borderColor: "#ecc8cc", background: "#fff5f5" }}><b style={{ color: "#b42336" }}>!</b><p>Tichetele selectate, documentațiile, rapoartele și fotografiile salvate în aplicație vor fi șterse definitiv.</p></div>
+              <label><span>Scrie STERGE pentru confirmare *</span><input value={bulkDeleteConfirmation} onChange={(event) => setBulkDeleteConfirmation(event.target.value)} required autoComplete="off" placeholder="STERGE" autoFocus disabled={projectDeleting} /></label>
+              <small>Dosarele existente în OneDrive și Google Drive sunt păstrate ca arhivă.</small>
+            </div>
+            <div className="modal-actions"><button type="button" className="secondary-button" onClick={closeModal} disabled={projectDeleting}>Anulează</button><button className="primary-button" style={{ background: "#b42336", borderColor: "#b42336" }} type="submit" disabled={projectDeleting || bulkDeleteConfirmation.trim().toUpperCase() !== "STERGE"}>{projectDeleting ? "Se șterg..." : `Șterge definitiv (${bulkDeletingProjects.length})`}</button></div>
           </form>
         )}
         {modal === "account" && (
