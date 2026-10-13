@@ -570,10 +570,8 @@ async function uploadJob(c: Connection, job: Job) {
     if (activity === "Intervenție Orange") {
       // Ignore legacy/demo rows that predate the Orange-only ticket guard.
       if (!validOrangeTicketId(job.item_id)) return;
-      // Synchronize the operational register before generating the heavier
-      // QAF/KMZ exports. If a document export reaches the Worker CPU limit,
-      // the centralizer row has already been inserted or updated.
-      await syncOrangeTicketWorkbook(job.item_id);
+      // Bulk OneDrive processing exports folders and documents only.
+      // Centralizer resynchronization is an explicit per-ticket action.
       const projectFolder = await orangeProjectDestination(token, c.root_id, job.item_id);
       const qaf = await buildOrangeQafXlsx(job.item_id);
       const shortTicket = shortOrangeTicket(job.item_id);
@@ -676,7 +674,12 @@ export async function syncOneDriveProject(projectIdInput: unknown, restart = fal
   if (!project || project.activity_type !== "Intervenție Orange") throw new Error("Tichetul Orange nu există.");
   const existing = await connection();
   if (!existing?.refresh_token || !usesOneDrive(existing.mode)) throw new Error("Conectează OneDrive și activează destinația Microsoft înainte de sincronizare.");
-  if (restart) await queueOneDriveProject(projectId);
+  if (restart) {
+    await queueOneDriveProject(projectId);
+    // The user explicitly requested this ticket. Synchronize its centralizer
+    // row once, before the subsequent polling requests process queued files.
+    await syncOrangeTicketWorkbook(projectId);
+  }
 
   const lease = crypto.randomUUID();
   const c = await getRawDb().prepare("UPDATE onedrive_connection SET lease = ?, lease_until = ? WHERE id = ? AND mode IN ('onedrive', 'both') AND refresh_token != '' AND lease_until < ? RETURNING *")
