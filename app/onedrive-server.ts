@@ -313,22 +313,19 @@ export async function syncOrangeTicketWorkbook(projectId: string) {
   if (!itemId || !driveId) throw new RemoteFailure("Excel Online: registrul partajat nu a putut fi identificat.");
 
   const workbook = `/drives/${encodeURIComponent(driveId)}/items/${encodeURIComponent(itemId)}/workbook`;
-  const [ticketColumn, tableRange] = await Promise.all([
-    graph(token, `${workbook}/tables/Table1/columns/${encodeURIComponent("Ticket ID")}/dataBodyRange?$select=values`),
-    graph(token, `${workbook}/tables/Table1/dataBodyRange?$select=values`),
-  ]);
+  // Reading the complete 31-column table for every synchronization consumes
+  // excessive Worker CPU. The ticket column is sufficient to locate an
+  // existing row. New tickets are appended, so a row with a manually blank
+  // Ticket ID can never be overwritten accidentally.
+  const ticketColumn = await graph(token, `${workbook}/tables/Table1/columns/${encodeURIComponent("Ticket ID")}/dataBodyRange?$select=values`);
   let existingIndex = -1;
   let targetIndex = -1;
   if (ticketColumn.ok) {
-    const [ticketRange, completeRange] = await Promise.all([
-      ticketColumn.json() as Promise<WorkbookRange>,
-      tableRange.ok ? tableRange.json() as Promise<WorkbookRange> : Promise.resolve({ values: [] }),
-    ]);
-    ({ existingIndex, targetIndex } = workbookTicketRow(ticketRange.values ?? [], project.id, completeRange.values ?? []));
+    const ticketRange = await ticketColumn.json() as WorkbookRange;
+    ({ existingIndex, targetIndex } = workbookTicketRow(ticketRange.values ?? [], project.id, []));
   } else if (ticketColumn.status !== 404) {
     await graphJson(ticketColumn);
   }
-  if (!tableRange.ok && tableRange.status !== 404) await graphJson(tableRange);
 
   // Table1 in the existing ENO3 centralizer spans A:AE (31 columns).
   // Microsoft Graph rejects rows whose value count differs from the table width.
