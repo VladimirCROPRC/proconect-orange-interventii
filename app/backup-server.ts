@@ -1,5 +1,5 @@
 import * as google from "./google-drive-server";
-import { backupMode, deleteOneDriveFileCopy, queueOneDrive, syncOrangeTicketWorkbook } from "./onedrive-server";
+import { backupMode, deleteOneDriveFileCopy, queueOneDrive } from "./onedrive-server";
 import { usesGoogle, usesOneDrive } from "./onedrive-core";
 import { getFileRow } from "./project-server";
 
@@ -14,23 +14,20 @@ async function both(kind: "file" | "project", id: string, googleSync: () => Prom
 }
 export async function syncProjectIfConnected(id: string) {
   const mode = await backupMode();
-  // A newly generated Orange ticket must appear in the Excel centralizer
-  // immediately. The queued project job remains the retry path and also
-  // generates the OneDrive folder, QAF and KMZ when field data is available.
+  // The operational centralizer is maintained outside this synchronization.
+  // Queue only the OneDrive project export (folders, QAF and KMZ).
   const outcomes = await Promise.allSettled([
     queueOneDrive("project", id),
-    usesOneDrive(mode) ? syncOrangeTicketWorkbook(id) : Promise.resolve(),
     usesGoogle(mode) ? google.syncProjectIfConnected(id) : Promise.resolve(),
   ]);
   for (const result of outcomes) if (result.status === "rejected") console.error("Project synchronization requires retry");
 }
 export async function syncReportIfConnected(id: string) {
   const mode = await backupMode();
-  // Field actions update Excel Online immediately. The queued project export
-  // still regenerates QAF/KMZ and provides an automatic retry path.
+  // Field actions queue only document regeneration. The operational
+  // centralizer is never read or written by this application.
   const outcomes = await Promise.allSettled([
     queueOneDrive("project", id),
-    usesOneDrive(mode) ? syncOrangeTicketWorkbook(id) : Promise.resolve(),
     usesGoogle(mode) ? google.syncReportIfConnected(id) : Promise.resolve(),
   ]);
   for (const result of outcomes) if (result.status === "rejected") console.error("Drive report refresh requires retry");
