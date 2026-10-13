@@ -1,3 +1,4 @@
+import { waitUntil } from "cloudflare:workers";
 import { saveFieldDocumentation } from "../../project-server";
 import { syncReportIfConnected } from "../../backup-server";
 import { currentSession, sameOrigin } from "../../server-auth";
@@ -15,7 +16,10 @@ export async function PATCH(request: Request) {
     }
     const result = await saveFieldDocumentation(body.projectId, body.section, body.content, session.account);
     if ("error" in result) return Response.json({ error: result.error }, { status: result.status });
-    try { await syncReportIfConnected(body.projectId); } catch { console.error("Drive report refresh requires retry"); }
+    // The database save is complete. External exports must not delay its acknowledgement.
+    waitUntil(syncReportIfConnected(body.projectId).catch(() => {
+      console.error("Drive report refresh requires retry");
+    }));
     return Response.json({ documentation: result.documentation, ...(result.project ? { project: result.project } : {}) });
   } catch (error) {
     console.error("Proconect field documentation error:", error instanceof Error ? error.message : "Unknown documentation failure");
