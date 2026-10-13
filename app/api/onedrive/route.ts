@@ -1,4 +1,4 @@
-import { beginOneDrive, disconnectOneDrive, drainOneDrive, oneDriveSameOrigin, oneDriveStatus, previewOrangeMail, retryOneDrive, setBackupMode, syncOneDriveProject } from "../../onedrive-server";
+import { beginOneDrive, disconnectOneDrive, drainOneDrive, oneDriveSameOrigin, oneDriveStatus, previewOrangeMail, setBackupMode, syncOneDriveProject } from "../../onedrive-server";
 import { importOrangeMailTickets, orangeMailImportStatus, setOrangeMailImportEnabled } from "../../orange-mail-import";
 import { currentSession } from "../../server-auth";
 export const dynamic = "force-dynamic";
@@ -46,7 +46,6 @@ export async function POST(request: Request) {
       case "authorize": return Response.json({ authorizationUrl: await beginOneDrive(auth.session!.sessionId) }, { headers: { "Cache-Control": "no-store" } });
       case "mode": await setBackupMode(body.mode); break;
       case "disconnect": await disconnectOneDrive(); break;
-      case "retry": await retryOneDrive(); break;
       case "process": await drainOneDrive(); break;
       default: return Response.json({ error: "Operațiune invalidă." }, { status: 400 });
     }
