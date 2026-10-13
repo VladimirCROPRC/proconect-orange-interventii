@@ -444,10 +444,6 @@ function readableFolderName(value: string) {
   return value.normalize("NFC").replace(/[\u0000-\u001f"*:<>?\/\\|#%]/g, "_").replace(/^[. ]+|[. ]+$/g, "").slice(0, 140) || "Lucrare";
 }
 
-function validOrangeTicketId(value: string) {
-  return /^(IMO|FITT|PBM)\d+$/i.test(value.trim());
-}
-
 const romanianMonths = ["Ianuarie", "Februarie", "Martie", "Aprilie", "Mai", "Iunie", "Iulie", "August", "Septembrie", "Octombrie", "Noiembrie", "Decembrie"];
 
 function shortOrangeTicket(projectId: string) {
@@ -568,8 +564,6 @@ async function uploadJob(c: Connection, job: Job) {
     if (!project) return;
     const activity: OneDriveActivity = project.activity_type && project.activity_type in oneDriveActivityFolders ? project.activity_type : "Instalare";
     if (activity === "Intervenție Orange") {
-      // Ignore legacy/demo rows that predate the Orange-only ticket guard.
-      if (!validOrangeTicketId(job.item_id)) return;
       // Bulk OneDrive processing exports folders and documents only.
       // Centralizer resynchronization is an explicit per-ticket action.
       const projectFolder = await orangeProjectDestination(token, c.root_id, job.item_id);
@@ -617,7 +611,6 @@ async function uploadJob(c: Connection, job: Job) {
   const project = await getRawDb().prepare("SELECT activity_type FROM projects WHERE id = ?").bind(projectId).first<{ activity_type?: OneDriveActivity }>();
   if (!project) return;
   if (project.activity_type && project.activity_type in oneDriveActivityFolders) activity = project.activity_type;
-  if (activity === "Intervenție Orange" && !validOrangeTicketId(projectId)) return;
   const stored = await bucket().get(file.storage_key);
   if (!stored) throw new Error("Fișierul sursă nu mai este disponibil în Cloudflare.");
   const filename = await safeName(file.original_name, file.id);
