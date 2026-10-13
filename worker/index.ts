@@ -43,7 +43,15 @@ const worker = {
     }
 
     const response = await handler.fetch(request, env, ctx);
-    if (oneDriveConfigured() && response.ok && ["POST", "PATCH", "DELETE"].includes(request.method) && !url.pathname.startsWith("/api/onedrive")) {
+    const shouldDrainOneDrive = oneDriveConfigured()
+      && response.ok
+      && ["POST", "PATCH", "DELETE"].includes(request.method)
+      && !url.pathname.startsWith("/api/onedrive")
+      // Field documentation already updates the Orange register and queues
+      // QAF/KMZ regeneration. Let cron process that heavier export separately
+      // so saving an activity stays within the request CPU budget.
+      && url.pathname !== "/api/documentation";
+    if (shouldDrainOneDrive) {
       ctx.waitUntil(drainOneDrive().catch(() => console.error("OneDrive background processing requires retry")));
     }
     return response;
