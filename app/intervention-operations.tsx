@@ -297,7 +297,7 @@ export function InterventionOperationsSection({
   const closingDate = romanianDateToIso(closingDateInput);
   const closingDateReady = /^\d{4}-\d{2}-\d{2}$/.test(closingDate);
   const closingTimeReady = validManualTime(closingTime);
-  const canFinalize = Boolean(canEdit && initialSummary?.assessment && initialSummary?.execution && reportReady && closingDateReady && closingTimeReady && incidentInSla && nicmUpdateRequired && project.status !== "Finalizat");
+  const canFinalize = Boolean(canEdit && initialSummary?.assessment && reportReady && closingDateReady && closingTimeReady && incidentInSla && nicmUpdateRequired && project.status !== "Finalizat");
 
   async function addPhotos(selectedFiles: File[], category: "damage" | "site-measurement" = "damage") {
     if (!selectedFiles.length) return;
@@ -415,7 +415,7 @@ export function InterventionOperationsSection({
 
   async function closeIntervention() {
     if (!canFinalize || !initialSummary?.assessment) {
-      setError("Completează constatarea, salvează execuția și completează raportul intervenției.");
+      setError("Completează constatarea și raportul intervenției.");
       return;
     }
 
