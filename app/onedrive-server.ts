@@ -354,12 +354,12 @@ export async function syncOrangeTicketWorkbook(projectId: string) {
   desiredValues[16] = orangeClosingTimestamp(documentation?.validatedAt, documentation?.closingDate, documentation?.closingTime);
   desiredValues[17] = assessment?.cableCapacity ?? project.cable_capacity;
   desiredValues[18] = incidentDescription;
-  desiredValues[20] = documentation?.incidentInSla ?? "";
   desiredValues[21] = remediationDescription;
   desiredValues[22] = typeof damageLocation?.lat === "number" && typeof damageLocation?.lon === "number" ? `${damageLocation.lat.toFixed(6)}, ${damageLocation.lon.toFixed(6)}` : "";
-  desiredValues[23] = documentation?.nicmUpdateRequired ?? "";
+  desiredValues[24] = documentation?.incidentInSla ?? "";
+  desiredValues[25] = documentation?.nicmUpdateRequired ?? "";
 
-  const managedIndexes = [1, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16, 17, 18, 20, 21, 22, 23];
+  const managedIndexes = [1, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16, 17, 18, 21, 22, 24, 25];
   const savedState = await getRawDb().prepare("SELECT values_json FROM orange_workbook_sync_state WHERE project_id = ? LIMIT 1")
     .bind(project.id).first<{ values_json?: string }>();
   let previousAppValues: Array<WorkbookCell | null> | null = null;
