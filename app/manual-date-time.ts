@@ -20,6 +20,16 @@ export function validManualTime(value: string) {
   return /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value.trim());
 }
 
+export function formatManualDateInput(value: string) {
+  const digits = value.replace(/\D/g, "").slice(0, 8);
+  return [digits.slice(0, 2), digits.slice(2, 4), digits.slice(4, 8)].filter(Boolean).join(".");
+}
+
+export function formatManualTimeInput(value: string) {
+  const digits = value.replace(/\D/g, "").slice(0, 4);
+  return [digits.slice(0, 2), digits.slice(2, 4)].filter(Boolean).join(":");
+}
+
 export function combineRomanianDateTime(date: string, time: string) {
   const isoDate = romanianDateToIso(date);
   const normalizedTime = time.trim();
