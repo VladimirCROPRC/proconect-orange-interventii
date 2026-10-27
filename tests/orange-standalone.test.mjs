@@ -237,6 +237,13 @@ test("mail preview recognizes the FITT and IMO message formats", async () => {
   assert.equal(fitt.locality, "Mosnita Noua");
   assert.equal(fitt.county, "");
   assert.equal(fitt.incidentDescription, "Resurse NICM");
+  assert.equal(fitt.foSection, "OLT2-TI0337");
+
+  const fittWithOdb = parser.parseOrangeMail({
+    id: "mail-fitt-odb", subject: "FITT00000141517 / Assigned / Minor / ORO", receivedDateTime: "2026-09-21T11:11:00Z",
+    body: { content: "OLT/EDFA name:: OLT1-TI0004\nSeverity:: Minor\nIncident description:: Resurse NICM:olt1-ti0004; Slot: 2; Port: 12; ODB: TI0004FAN1ODB11537.Tehnicianul care s-a prezentat in zona de last mile pentru WO 41314305 si HHID:300000504578 a constatat lipsa semnal ODB" },
+  });
+  assert.equal(fittWithOdb.foSection, "TI0004FAN1ODB11537");
 
   const imo = parser.parseOrangeMail({
     id: "mail-imo", subject: "RE: LOSS OF SIGNAL NEC CR0129 <> CR0569 /// IMO000000313623", receivedDateTime: "2026-09-22T06:03:00Z",
