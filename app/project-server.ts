@@ -75,6 +75,7 @@ function normalizeMediaConverterType(mc: boolean, value: unknown) {
 
 const orangeTopologies = new Set(["FO BB", "FO Local", "VHBB"]);
 const orangeRouteTypes = new Set(["Aerian", "Subteran", "Mixt"]);
+const orangeCentralizerChoices = new Set(["Y", "N", "N/A"]);
 const orangeInterventionSlas: Record<string, Set<string>> = {
   IMO: new Set(["Y10", "Y8", "Y6"]),
   PBM: new Set(["minor", "Mediu", "Major"]),
@@ -836,11 +837,16 @@ export async function saveFieldDocumentation(projectId: string, section: string,
       const resolvedCompletedBy = await resolveTechnicians(completedByTechnicians);
       const closingTime = typeof intervention.documentation.closingTime === "string" ? intervention.documentation.closingTime.trim() : "";
       const closingDate = typeof intervention.documentation.closingDate === "string" ? intervention.documentation.closingDate.trim() : "";
+      const incidentInSla = typeof intervention.documentation.incidentInSla === "string" ? intervention.documentation.incidentInSla.trim() : "";
+      const nicmUpdateRequired = typeof intervention.documentation.nicmUpdateRequired === "string" ? intervention.documentation.nicmUpdateRequired.trim() : "";
       if (!incidentDescription || !remediationDescription || incidentDescription.length > 2_000 || remediationDescription.length > 2_000) {
         return { error: "Validează descrierea incidentului și descrierea remedierii.", status: 400 as const };
       }
       if (resolvedCompletedBy.length !== completedByTechnicians.length) {
         return { error: "Unul dintre tehnicienii selectați pentru finalizarea intervenției nu este disponibil.", status: 400 as const };
+      }
+      if (!orangeCentralizerChoices.has(incidentInSla) || !orangeCentralizerChoices.has(nicmUpdateRequired)) {
+        return { error: "Selectează Incident în SLA și Necesită actualizare în NICM.", status: 400 as const };
       }
       const closingDateMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(closingDate);
       const closingDateValue = closingDateMatch ? new Date(Date.UTC(Number(closingDateMatch[1]), Number(closingDateMatch[2]) - 1, Number(closingDateMatch[3]))) : null;
@@ -877,6 +883,8 @@ export async function saveFieldDocumentation(projectId: string, section: string,
           completedByTechnicians: resolvedCompletedBy.map((technician) => technician.name),
           closingDate,
           closingTime,
+          incidentInSla: incidentInSla as InterventionDocumentationSummary["incidentInSla"],
+          nicmUpdateRequired: nicmUpdateRequired as InterventionDocumentationSummary["nicmUpdateRequired"],
           services,
           ...(warehouseId ? { warehouseId } : {}),
           validatedAt: Date.now(),
