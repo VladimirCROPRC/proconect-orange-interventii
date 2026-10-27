@@ -6,11 +6,13 @@ export function isoDateToRomanian(value: string | undefined) {
 }
 
 export function romanianDateToIso(value: string) {
-  const match = /^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{4})$/.exec(value.trim());
-  if (!match) return "";
-  const day = Number(match[1]);
-  const month = Number(match[2]);
-  const year = Number(match[3]);
+  const normalized = value.trim();
+  const isoMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(normalized);
+  const match = /^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{4})$/.exec(normalized);
+  if (!match && !isoMatch) return "";
+  const day = Number(match?.[1] ?? isoMatch?.[3]);
+  const month = Number(match?.[2] ?? isoMatch?.[2]);
+  const year = Number(match?.[3] ?? isoMatch?.[1]);
   const date = new Date(Date.UTC(year, month - 1, day));
   if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return "";
   return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
@@ -18,11 +20,6 @@ export function romanianDateToIso(value: string) {
 
 export function validManualTime(value: string) {
   return /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value.trim());
-}
-
-export function formatManualDateInput(value: string) {
-  const digits = value.replace(/\D/g, "").slice(0, 8);
-  return [digits.slice(0, 2), digits.slice(2, 4), digits.slice(4, 8)].filter(Boolean).join(".");
 }
 
 export function formatManualTimeInput(value: string) {
@@ -53,6 +50,10 @@ function bucharestParts(timestamp: number): ManualDateTimeParts {
   };
 }
 
+
+export function currentBucharestIsoDate(timestamp = Date.now()) {
+  return romanianDateToIso(bucharestParts(timestamp).date);
+}
 export function timestampToRomanianDateTime(timestamp: number | undefined): ManualDateTimeParts {
   return timestamp && Number.isFinite(timestamp) ? bucharestParts(timestamp) : { date: "", time: "" };
 }
