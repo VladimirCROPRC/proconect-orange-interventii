@@ -20,6 +20,7 @@ import { TechnicianProjectSafety, type ProjectSafetyStatus } from "./technician-
 import { NoInterventionControl } from "./no-intervention-control";
 import { buildTicketsWithoutOrderXlsx } from "./ticket-report-xlsx";
 import { orangeCounties } from "./orange-counties";
+import { combineRomanianDateTime, projectDateTimeToRomanian } from "./manual-date-time";
 
 type View = "projects" | "interventions" | "orange-interventions" | "surveys" | "map" | "intervention-workspace" | "intervention-execution" | "intervention-documentation" | "survey-workspace" | "team" | "cpe" | "drive" | "materials" | "reports" | "documents" | "client" | "route" | "splices" | "site";
 type ActivityListView = "projects" | "interventions" | "orange-interventions" | "surveys";
@@ -701,6 +702,7 @@ export default function Home() {
     const id = activityType === "Intervenție" || activityType === "Intervenție Orange" ? rawId.toUpperCase() : `RID${rawId.replace(/^RID/i, "")}`.toUpperCase();
     const cpeName = String(form.get("cpe") || "");
     const selectedCpe = cpeList.find((item) => item.name === cpeName);
+    const orangeRequestDate = combineRomanianDateTime(String(form.get("requestDate") || ""), String(form.get("requestTime") || ""));
     if (projects.some((project) => project.id === id)) {
       showToast(activityType === "Intervenție" || activityType === "Intervenție Orange" ? "Numărul tichetului există deja. Verifică valoarea introdusă." : "Request ID există deja. Verifică numărul introdus.");
       return;
@@ -732,7 +734,7 @@ export default function Home() {
       mcType: (form.get("mc") === "on" ? String(form.get("mcType") || "") : "") as Project["mcType"],
       terminalBox: form.get("terminalBox") === "on",
       status: "Planificat",
-      date: isOrangeForm ? String(form.get("requestDate") || "").trim() : "Astăzi",
+      date: isOrangeForm ? orangeRequestDate : "Astăzi",
       ipwo: ipwoName || "Fișier neîncărcat",
       splice: spliceName || "Fișier neîncărcat",
     };
@@ -781,6 +783,7 @@ export default function Home() {
     const form = new FormData(event.currentTarget);
     const cpeName = String(form.get("cpe") || editingProject.cpe || "");
     const selectedCpe = cpeList.find((item) => item.name === cpeName);
+    const orangeRequestDate = combineRomanianDateTime(String(form.get("requestDate") || ""), String(form.get("requestTime") || ""));
     const project: Project = {
       ...editingProject,
       activityType: String(form.get("activityType") || editingProject.activityType) as ProjectActivityType,
@@ -808,7 +811,7 @@ export default function Home() {
       mcType: (form.get("mc") === "on" ? String(form.get("mcType") || "") : "") as Project["mcType"],
       terminalBox: form.get("terminalBox") === "on",
       status: String(form.get("status") || editingProject.status) as Project["status"],
-      date: String(form.get("date") || editingProject.date),
+      date: isOrangeForm ? orangeRequestDate : String(form.get("date") || editingProject.date),
       ipwo: ipwoFile ? ipwoName : editingProject.ipwo,
       splice: spliceFile ? spliceName : editingProject.splice,
     };
@@ -1808,7 +1811,7 @@ export default function Home() {
                   ? <div className="wide oro-form-field"><OroLookup name="address" label="Cod site B (opțional)" defaultValue={editingProject?.address} placeholder="Caută un site ORO" /></div>
                   : <label className="wide"><span>{isInstallationForm ? "Adresă instalare *" : "Adresă lucrare *"}</span><input name="address" required defaultValue={editingProject?.address} /></label>}
                 {isOrangeForm && <>
-                  {!editingProject && <label><span>Data și ora solicitării intervenției</span><input type="datetime-local" name="requestDate" step="60" /></label>}
+                  {!editingProject && <><label><span>Data solicitării intervenției</span><input type="text" inputMode="numeric" name="requestDate" placeholder="ZZ.LL.AAAA" pattern="\\d{2}\\.\\d{2}\\.\\d{4}" /></label><label><span>Ora solicitării intervenției</span><input type="text" inputMode="numeric" name="requestTime" placeholder="HH:MM" pattern="(?:[01]\\d|2[0-3]):[0-5]\\d" /></label></>}
                   <label className="wide"><span>Denumirea tronsonului FO</span><input name="foSectionName" maxLength={200} defaultValue={editingProject?.foSectionName ?? ""} /></label>
                   <label><span>Topologie tronson</span><select name="topology" defaultValue={editingProject?.topology ?? ""}><option value="">Selectează topologia</option><option>FO BB</option><option>FO Local</option><option>VHBB</option></select></label>
                   <label><span>Tip intervenție</span><select name="orangeInterventionType" value={orangeInterventionType ?? ""} onChange={(event) => { setOrangeInterventionType(event.target.value as Project["orangeInterventionType"]); setOrangeSla(""); }}><option value="">Selectează tipul</option><option>FITT</option><option>IMO</option><option>PBM</option></select></label>
@@ -1828,7 +1831,7 @@ export default function Home() {
                     ? <div className="wide"><span className="field-label">Tehnicieni alocați</span><div className="switch-row">{technicians.map((tech) => <label className="switch-card" key={tech.username}><span><b>{tech.name}</b><small>@{tech.username}</small></span><input type="checkbox" name="technicians" value={tech.name} defaultChecked={(editingProject?.technicians ?? (editingProject?.technician ? editingProject.technician.split(" · ") : [])).includes(tech.name)} /><i /></label>)}</div></div>
                     : <label><span>Tehnician alocat *</span><select name="technician" required defaultValue={editingProject?.technician || ""}><option value="">Selectează tehnicianul</option>{technicians.map((tech) => <option key={tech.username}>{tech.name}</option>)}</select></label>}
                 {isInstallationForm && <label><span>Tip CPE *</span><select name="cpe" required defaultValue={editingProject?.cpe || ""}><option value="" disabled>{cpeList.length ? "Selectează echipamentul" : "Catalogul CPE este gol"}</option>{editingProject?.cpe && !cpeList.some((cpe) => cpe.name === editingProject.cpe) && <option value={editingProject.cpe}>{editingProject.cpe} (echipament istoric)</option>}{cpeList.map((cpe) => <option key={cpe.name} value={cpe.name}>{cpe.name}{cpe.requiresGrounding ? " · necesită împământare" : ""}</option>)}</select><small>Adaugă și configurează echipamentele din secțiunea CPE.</small></label>}
-                {editingProject && <><label><span>Status proiect *</span><select name="status" required defaultValue={editingProject.status}><option>Planificat</option><option>În desfășurare</option><option>De verificat</option><option>Finalizat</option></select></label><label><span>{isOrangeForm ? "Data și ora solicitării intervenției" : "Programare *"}</span><input name="date" type={isOrangeForm ? "datetime-local" : "text"} step={isOrangeForm ? "60" : undefined} required={!isOrangeForm} defaultValue={isOrangeForm && /^\d{4}-\d{2}-\d{2}$/.test(editingProject.date) ? `${editingProject.date}T00:00` : editingProject.date} /></label></>}
+                {editingProject && <><label><span>Status proiect *</span><select name="status" required defaultValue={editingProject.status}><option>Planificat</option><option>În desfășurare</option><option>De verificat</option><option>Finalizat</option></select></label>{isOrangeForm ? <><label><span>Data solicitării intervenției</span><input name="requestDate" type="text" inputMode="numeric" placeholder="ZZ.LL.AAAA" pattern="\\d{2}\\.\\d{2}\\.\\d{4}" defaultValue={projectDateTimeToRomanian(editingProject.date).date} /></label><label><span>Ora solicitării intervenției</span><input name="requestTime" type="text" inputMode="numeric" placeholder="HH:MM" pattern="(?:[01]\\d|2[0-3]):[0-5]\\d" defaultValue={projectDateTimeToRomanian(editingProject.date).time} /></label></> : <label><span>Programare *</span><input name="date" type="text" required defaultValue={editingProject.date} /></label>}</>}
                 {isInstallationForm && <div className="wide"><span className="field-label">Echipamente suplimentare</span><div className="switch-row">
                   <label className="switch-card"><span><b>SFP</b><small>Modul optic</small></span><input type="checkbox" name="sfp" defaultChecked={editingProject ? editingProject.sfp : true} /><i /></label>
                   <label className="switch-card"><span><b>MC</b><small>Media converter</small></span><input type="checkbox" name="mc" checked={mcSelected} onChange={(event) => setMcSelected(event.target.checked)} /><i /></label>
