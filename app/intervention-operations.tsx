@@ -349,7 +349,7 @@ export function InterventionOperationsSection({
     event.preventDefault();
     if (!damageType || !arrivedAt || !incidentDescription.trim() || !assessmentPhotosReady || !siteMeasurementReady || (orangeIntervention && (!cause || !damageLocation || !cableDetailsReady))) {
       setError(!siteMeasurementReady
-        ? "Completează codul site-ului, lungimea OTDR și fotografia măsurătorii cu GPS valid."
+        ? canEdit ? "Completează codul site-ului și lungimea OTDR." : "Completează codul site-ului, lungimea OTDR și fotografia măsurătorii cu GPS valid."
         : !cableDetailsReady ? "Completează capacitatea cablului și tipul traseului constatate în teren."
         : !assessmentPhotosReady ? (damageType === "FO cut" ? "Pentru FO cut sunt obligatorii cel puțin 3 fotografii cu GPS valid." : "Adaugă cel puțin o fotografie cu GPS valid.")
         : orangeIntervention ? "Selectează tipul și cauza avariei și amplasează locația pe hartă." : "Selectează tipul avariei.");
