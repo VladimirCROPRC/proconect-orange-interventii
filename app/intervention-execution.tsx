@@ -16,6 +16,7 @@ import { useMapGestures } from "./use-map-gestures";
 import { useMapFullscreen } from "./use-map-fullscreen";
 import { fetchMapSites, mapSiteMarkerClass } from "./map-sites-client";
 import { MapSiteLegend } from "./map-site-legend";
+import { analysisCapturedAt, analysisCoordinates, analyzeCoordinatorPhoto } from "./photo-analysis-client";
 
 type Coordinate = { lat: number; lon: number };
 type OrangeNetworkSiteRow = [code: string, description: string, region: string, lat: number, lon: number];
@@ -43,6 +44,7 @@ type Props = {
   onNotify: (message: string) => void;
   onSaved: (summary: InterventionFieldSummary) => Promise<void>;
   blankMap?: boolean;
+  coordinatorMode?: boolean;
 };
 
 const MAP_WIDTH = 1000;
@@ -186,7 +188,7 @@ async function photoLocation() {
   ));
 }
 
-export function InterventionExecutionSection({ project, initialSummary, onNotify, onSaved, blankMap = false }: Props) {
+export function InterventionExecutionSection({ project, initialSummary, onNotify, onSaved, blankMap = false, coordinatorMode = false }: Props) {
   const [sites, setSites] = useState<OrangeNetworkSiteRow[]>([]);
   const [sitesStatus, setSitesStatus] = useState<"loading" | "ready" | "error">("loading");
   const [center, setCenter] = useState<Coordinate>(DEFAULT_CENTER);
@@ -358,6 +360,7 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
       : readyJunction(draft?.junction ?? null);
   const routeReady = draft?.type !== "fo-installation" || (routeCoordinates.length >= 2 && Boolean(draft.cableType.trim()) && cableLengthValid);
   const activityReady = Boolean(initialSummary?.assessment && draft?.type && selectedReady && routeReady && requiredPhotos && activityPhotos.length >= requiredPhotos && junctionPhotosReady);
+  const coordinatorJunctionNumber = Math.min(4, activities.filter((activity) => activity.type === "junction-installation").length + 1);
 
   function beginActivity() {
     if (!initialSummary?.assessment) {
@@ -480,12 +483,52 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
     setUploading(true);
     setError("");
     try {
-      const geo = await photoLocation();
+      const fieldGeo = coordinatorMode ? "" : await photoLocation();
       for (const file of files) {
-        const saved = await uploadProjectFile({ projectId: project.id, section: "intervention-execution", category: `${draft.id}:${category}`, file, geo });
+        let geo = fieldGeo;
+        let capturedAt = Date.now();
+        if (coordinatorMode) {
+          const analysis = await analyzeCoordinatorPhoto({
+            projectId: project.id,
+            file,
+            context: "execution-junction",
+            junctionNumber: coordinatorJunctionNumber,
+          });
+          const coordinates = analysisCoordinates(analysis);
+          geo = coordinates.geo;
+          capturedAt = analysisCapturedAt(analysis);
+          const targetSlot: JunctionSlot = draft.type === "fo-installation" ? (activeSlot === "b" ? "b" : "a") : "junction";
+          const junction: DraftJunction = {
+            id: `coordinator-${draft.id}-${targetSlot}`,
+            code: analysis.junctionCode || `Joncțiunea ${coordinatorJunctionNumber}`,
+            name: analysis.summary || `Joncțiunea ${coordinatorJunctionNumber} identificată din fotografie`,
+            region: "Poziție extrasă din fotografia coordonatorului",
+            lat: coordinates.lat,
+            lon: coordinates.lon,
+            documented: false,
+            kind: draft.type === "junction-installation" || draft.type === "chamber-installation" ? "new" : "existing",
+            network: "",
+          };
+          updateJunction(targetSlot, junction);
+          setCenter(coordinates);
+          setZoom(18);
+          setRemediationDescription((current) => current.trim() ? current : analysis.remediationDescription || analysis.summary);
+        }
+        const saved = await uploadProjectFile({
+          projectId: project.id,
+          section: "intervention-execution",
+          category: `${draft.id}:${category}`,
+          file,
+          geo,
+          capturedAt,
+        });
         setPhotos((current) => [...current, saved]);
       }
-      onNotify(files.length === 1 ? "Fotografia activității a fost salvată cu GPS." : `${files.length} fotografii ale activității au fost salvate cu GPS.`);
+      onNotify(coordinatorMode
+        ? `OpenAI a interpretat fotografia și a poziționat Joncțiunea ${coordinatorJunctionNumber} pe hartă. Verifică punctul, tipul și rețeaua înainte de salvare.`
+        : files.length === 1
+          ? "Fotografia activității a fost salvată cu GPS."
+          : `${files.length} fotografii ale activității au fost salvate cu GPS.`);
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : "Fotografiile activității nu au putut fi încărcate.");
     } finally {
@@ -771,10 +814,11 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
                   {aerialCableInstallation && <div className="fo-photo-rules intervention-photo-thresholds"><span className={cableLengthValid && cableLength <= 100 ? "active" : ""}><b>≤100 m</b><small>3 poze</small></span><span className={cableLength > 100 && cableLength <= 200 ? "active" : ""}><b>101–200 m</b><small>5 poze</small></span><span className={cableLength > 200 ? "active" : ""}><b>&gt;200 m</b><small>minimum 10 poze</small></span></div>}
                 </> : junctionPanel("junction", draft.type === "diagnostics" ? "PUNCTUL ÎNDREPTĂRII CABLULUI" : draft.type === "splice-repair" ? "JONCȚIUNEA REFACERII SUDURII" : draft.type === "chamber-installation" ? "CAMERETA NOU INSTALATĂ" : "JONCȚIUNEA NOU INSTALATĂ", draft.junction)}
 
+                {coordinatorMode && draft.type === "junction-installation" && <div className="geo-notice"><span>AI</span><p><strong>Încărcare Joncțiunea {coordinatorJunctionNumber}</strong>Încarcă fotografiile primite pe WhatsApp. OpenAI citește textul și coordonatele, apoi amplasează joncțiunea pe hartă. Salvează activitatea înainte de Joncțiunea următoare.</p></div>}
                 <div className="intervention-activity-photo-title"><strong>3. {draft.type === "diagnostics" ? "Fotografii îndreptare cablu la cald" : draft.type === "fo-installation" ? "Fotografii instalare FO" : draft.type === "junction-installation" ? "Fotografii joncțiune (3 tipuri obligatorii)" : draft.type === "chamber-installation" ? "Fotografii camereta (2 obligatorii)" : "Fotografii remediere"}</strong><span>{activityPhotos.length}/{requiredPhotos || "—"}</span></div>
                 {draft.type === "junction-installation" ? <div className="intervention-material-source-lists">
-                  {junctionPhotoSlots.map(({ kind, label }) => { const present = activityPhotos.some((photo) => photo.category === `${draft.id}:${kind}`); return <label key={kind} className={`intervention-photo-upload intervention-activity-upload${uploading ? " is-uploading" : ""}`}><input type="file" accept="image/*" capture="environment" disabled={uploading || present} onChange={(event) => { const selected = Array.from(event.target.files ?? []); event.currentTarget.value = ""; void addActivityPhotos(selected.slice(0, 1), kind); }} /><span className="intervention-upload-icon">{present ? "✓" : "⌖"}</span><strong>{present ? `${label} · salvată` : label}</strong><small>O fotografie GPS obligatorie.</small></label>; })}
-                </div> : <label className={`intervention-photo-upload intervention-activity-upload${uploading ? " is-uploading" : ""}${!requiredPhotos ? " is-disabled" : ""}`}><input type="file" accept="image/*" capture="environment" multiple disabled={uploading || !requiredPhotos} onChange={(event) => { const selected = Array.from(event.target.files ?? []); event.currentTarget.value = ""; void addActivityPhotos(selected); }} /><span className="intervention-upload-icon">⌖</span><strong>{uploading ? "Se încarcă fotografiile..." : "Adaugă fotografii GPS"}</strong><small>Data, ora și poziția sunt marcate pe imagine.</small></label>}
+                  {junctionPhotoSlots.map(({ kind, label }) => { const present = activityPhotos.some((photo) => photo.category === `${draft.id}:${kind}`); return <label key={kind} className={`intervention-photo-upload intervention-activity-upload${uploading ? " is-uploading" : ""}`}><input type="file" accept="image/*" capture={coordinatorMode ? undefined : "environment"} disabled={uploading || present} onChange={(event) => { const selected = Array.from(event.target.files ?? []); event.currentTarget.value = ""; void addActivityPhotos(selected.slice(0, 1), kind); }} /><span className="intervention-upload-icon">{present ? "✓" : "⌖"}</span><strong>{present ? `${label} · salvată` : label}</strong><small>O fotografie GPS obligatorie.</small></label>; })}
+                </div> : <label className={`intervention-photo-upload intervention-activity-upload${uploading ? " is-uploading" : ""}${!requiredPhotos ? " is-disabled" : ""}`}><input type="file" accept="image/*" capture={coordinatorMode ? undefined : "environment"} multiple disabled={uploading || !requiredPhotos} onChange={(event) => { const selected = Array.from(event.target.files ?? []); event.currentTarget.value = ""; void addActivityPhotos(selected); }} /><span className="intervention-upload-icon">⌖</span><strong>{uploading ? (coordinatorMode ? "OpenAI interpretează fotografiile..." : "Se încarcă fotografiile...") : coordinatorMode ? `Încarcă fotografii pentru Joncțiunea ${coordinatorJunctionNumber}` : "Adaugă fotografii GPS"}</strong><small>{coordinatorMode ? "Coordonatele și descrierea sunt extrase din textul vizibil al fotografiei." : "Data, ora și poziția sunt marcate pe imagine."}</small></label>}
 
                 {activityPhotos.length > 0 && <div className="intervention-activity-photo-list">{activityPhotos.map((photo) => <article key={photo.id}><span>✓</span><div><strong>{photo.name}</strong><small>⌖ {photo.geo} · {formatCapturedAt(photo.capturedAt)}</small></div><button type="button" onClick={() => void removeActivityPhoto(photo)} disabled={removingPhoto === photo.id}>{removingPhoto === photo.id ? "..." : "×"}</button></article>)}</div>}
                 {error && <p className="intervention-error" role="alert">{error}</p>}
