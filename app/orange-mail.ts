@@ -52,7 +52,6 @@ export function parseOrangeMail(message: { id?: string; subject?: string; receiv
   }
 
   const endpoints = /\b([A-Z]{2,5}\d{3,})\s*<>\s*([A-Z]{2,5}\d{3,})\b/i.exec(subject);
-  const section = /\bFO\s+[A-Z0-9_-]+\s+to\s+[A-Z0-9_-]+\b/i.exec(body)?.[0] ?? "";
   return {
     messageId: String(message.id ?? ""), ticketId, flow, subject,
     receivedAt: String(message.receivedDateTime ?? ""),
