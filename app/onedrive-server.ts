@@ -686,7 +686,9 @@ export async function syncOneDriveProject(projectIdInput: unknown, restart = fal
     .bind(lease, Date.now() + 120_000, settingsId, Date.now()).first<Connection>();
   if (!c) return { ...(await projectSyncState(projectId)), busy: true };
   try {
-    const job = await getRawDb().prepare(`SELECT * FROM onedrive_jobs WHERE revision > done_revision AND next_at <= ? AND ${projectJobFilter} ORDER BY CASE WHEN kind = 'file' THEN 0 ELSE 1 END, id LIMIT 1`)
+    // The QAF must reflect the latest saved documentation immediately. Files
+    // continue on subsequent polling calls after the project export succeeds.
+    const job = await getRawDb().prepare(`SELECT * FROM onedrive_jobs WHERE revision > done_revision AND next_at <= ? AND ${projectJobFilter} ORDER BY CASE WHEN kind = 'project' THEN 0 ELSE 1 END, id LIMIT 1`)
       .bind(Date.now(), projectId, projectId).first<Job>();
     if (job) {
       try {
