@@ -286,3 +286,40 @@ test("automatic mail import is scheduled, deduplicated, and starts at activation
   assert.match(settings, /Import automat e-mail/);
   assert.match(settings, /Verifică e-mailurile acum/);
 });
+
+
+test("coordinators can interpret WhatsApp photos with OpenAI without exposing the provider response", async () => {
+  const route = await source("app/api/photo-analysis/route.ts");
+  const client = await source("app/photo-analysis-client.ts");
+  assert.match(route, /isManagementRole\(session\.account\)/);
+  assert.match(route, /OPENAI_API_KEY/);
+  assert.match(route, /https:\/\/api\.openai\.com\/v1\/responses/);
+  assert.match(route, /type: "input_image"/);
+  assert.match(route, /type: "json_schema"/);
+  assert.match(route, /store: false/);
+  assert.match(route, /x-request-id/);
+  assert.doesNotMatch(route, /raw\.slice/);
+  assert.match(client, /maximumWidth = landscape \? 1024 : 768/);
+  assert.match(client, /maximumHeight = landscape \? 768 : 1024/);
+  assert.match(client, /analysisCoordinates/);
+  assert.match(client, /extras din fotografie/);
+});
+
+test("field and coordinator photo workflows remain role-specific", async () => {
+  const operations = await source("app/intervention-operations.tsx");
+  const execution = await source("app/intervention-execution.tsx");
+  const filesRoute = await source("app/api/files/route.ts");
+  const projectServer = await source("app/project-server.ts");
+  const worker = await source("worker/index.ts");
+  assert.match(operations, /const fieldGeo = canEdit \? "" : await currentPhotoLocation\(\)/);
+  assert.match(operations, /context: "assessment"/);
+  assert.match(operations, /setDamageLocation/);
+  assert.match(operations, /coordinatorMode=\{canEdit\}/);
+  assert.match(execution, /coordinatorMode \? "" : await photoLocation\(\)/);
+  assert.match(execution, /context: "execution-junction"/);
+  assert.match(execution, /Încărcare Joncțiunea \{coordinatorJunctionNumber\}/);
+  assert.match(execution, /updateJunction\(targetSlot, junction\)/);
+  assert.match(filesRoute, /form\.get\("capturedAt"\)/);
+  assert.match(projectServer, /capturedAt: input\.capturedAt/);
+  assert.match(worker, /url\.pathname !== "\/api\/photo-analysis"/);
+});
