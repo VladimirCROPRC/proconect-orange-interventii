@@ -339,3 +339,18 @@ test("management can save assessment and execution without mandatory photos", as
   assert.match(server, /!managementMode && validDamagePhotos < requiredDamagePhotos/);
   assert.match(server, /!managementMode && activityPhotos < requiredPhotos/);
 });
+
+
+test("closing an Orange ticket publishes the final QAF before queued files", async () => {
+  const route = await source("app/api/documentation/route.ts");
+  const backup = await source("app/backup-server.ts");
+  const oneDrive = await source("app/onedrive-server.ts");
+  const qaf = await source("app/orange-qaf.ts");
+  assert.match(route, /result\.project\s*\? syncFinalizedReportIfConnected\(body\.projectId\)/);
+  assert.match(backup, /export async function syncFinalizedReportIfConnected/);
+  assert.match(backup, /syncOneDriveProject\(id, true\)/);
+  assert.match(oneDrive, /ORDER BY CASE WHEN kind = 'project' THEN 0 ELSE 1 END/);
+  assert.match(qaf, /manualClosingPlacement\(documentation\.closingDate, documentation\.closingTime, validationDate\)/);
+  assert.match(qaf, /writeCachedValuePreservingFormula\(mainXml, "C79"/);
+  assert.match(qaf, /writeQuantity\(servicesXml, `E\$\{service\.qafRow\}`, quantity\)/);
+});
