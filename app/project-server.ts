@@ -679,6 +679,7 @@ export async function saveFieldDocumentation(projectId: string, section: string,
         damageType?: unknown;
         cause?: unknown;
         arrivedAt?: unknown;
+        documentedAt?: unknown;
         incidentDescription?: unknown;
         damageLocation?: { lat?: unknown; lon?: unknown };
         siteMeasurement?: { siteCode?: unknown; otdrLengthMeters?: unknown; photoCount?: unknown };
@@ -704,6 +705,9 @@ export async function saveFieldDocumentation(projectId: string, section: string,
     }
     if (typeof assessment.arrivedAt !== "number" || !Number.isFinite(assessment.arrivedAt) || assessment.arrivedAt <= 0) {
       return { error: "Înregistrează sosirea echipei în zona avariei.", status: 400 as const };
+    }
+    if (typeof assessment.documentedAt !== "number" || !Number.isFinite(assessment.documentedAt) || assessment.documentedAt < assessment.arrivedAt) {
+      return { error: "Introdu data și ora constatării, ulterioare sau egale sosirii în zonă.", status: 400 as const };
     }
     if (typeof assessment.incidentDescription !== "string" || !assessment.incidentDescription.trim() || assessment.incidentDescription.trim().length > 2_000) {
       return { error: "Completează descrierea incidentului constatat.", status: 400 as const };
