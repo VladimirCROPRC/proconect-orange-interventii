@@ -130,7 +130,7 @@ export async function POST(request: Request) {
     });
     const raw = await openAiResponse.text();
     if (!openAiResponse.ok) {
-      console.error("OpenAI photo analysis failed:", openAiResponse.status, raw.slice(0, 300));
+      console.error("OpenAI photo analysis failed:", openAiResponse.status, openAiResponse.headers.get("x-request-id") || "no-request-id");
       return Response.json({ error: "OpenAI nu a putut interpreta fotografia momentan." }, { status: 502 });
     }
     const payload = JSON.parse(raw) as { output?: Array<{ content?: Array<{ type?: string; text?: string }> }> };
