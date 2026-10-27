@@ -323,3 +323,19 @@ test("field and coordinator photo workflows remain role-specific", async () => {
   assert.match(projectServer, /capturedAt: input\.capturedAt/);
   assert.match(worker, /url\.pathname !== "\/api\/photo-analysis"/);
 });
+
+
+test("management can save assessment and execution without mandatory photos", async () => {
+  const operations = await source("app/intervention-operations.tsx");
+  const execution = await source("app/intervention-execution.tsx");
+  const server = await source("app/project-server.ts");
+  assert.match(operations, /requiredAssessmentPhotos = canEdit \? 0/);
+  assert.match(operations, /assessmentPhotosReady = canEdit \|\|/);
+  assert.match(operations, /canEdit \|\| validSiteMeasurementPhotos\.length > 0/);
+  assert.match(execution, /activityPhotosReady = coordinatorMode \|\|/);
+  assert.match(execution, /!coordinatorMode && draft\.type === "junction-installation"/);
+  assert.match(execution, /requiredPhotoCount: coordinatorMode \? 0 : requiredPhotos/);
+  assert.match(server, /const managementMode = isManagementRole\(account\)/);
+  assert.match(server, /!managementMode && validDamagePhotos < requiredDamagePhotos/);
+  assert.match(server, /!managementMode && activityPhotos < requiredPhotos/);
+});
