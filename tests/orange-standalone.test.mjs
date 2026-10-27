@@ -365,17 +365,14 @@ test("management can save assessment and execution without mandatory photos", as
 });
 
 
-test("Orange execution can be saved and finalized without an activity", async () => {
+test("Orange tickets can continue to documentation without execution activities", async () => {
   const execution = await source("app/intervention-execution.tsx");
   const operations = await source("app/intervention-operations.tsx");
   const server = await source("app/project-server.ts");
-  assert.match(execution, /saveExecutionWithoutActivity/);
-  assert.match(execution, /Salvează execuția fără activitate/);
-  assert.match(execution, /execution: \{ activities: \[\], materials/);
-  assert.match(operations, /initialSummary\?\.execution && reportReady/);
-  assert.doesNotMatch(operations, /executionActivities\.length && reportReady/);
-  assert.match(server, /!intervention\.execution \|\| !Array\.isArray\(intervention\.execution\.activities\)/);
-  assert.doesNotMatch(server, /!intervention\.execution\?\.activities\?\.length/);
+  assert.doesNotMatch(execution, /saveExecutionWithoutActivity|Salvează execuția fără activitate/);
+  assert.match(operations, /initialSummary\?\.assessment && reportReady/);
+  assert.doesNotMatch(operations, /executionActivities\.length && reportReady|initialSummary\?\.execution && reportReady/);
+  assert.doesNotMatch(server, /Salvează secțiunea Execuție înainte de închiderea intervenției|!intervention\.execution\?\.activities\?\.length/);
 });
 
 test("Orange centralizers use assessed cable capacity and coordinator SLA NICM choices", async () => {
