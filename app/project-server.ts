@@ -822,9 +822,6 @@ export async function saveFieldDocumentation(projectId: string, section: string,
     }
 
     if (intervention.documentation) {
-      if (!intervention.execution || !Array.isArray(intervention.execution.activities)) {
-        return { error: "Salvează secțiunea Execuție înainte de închiderea intervenției.", status: 400 as const };
-      }
       const report = typeof intervention.documentation.report === "string" ? intervention.documentation.report.trim() : "";
       if (report.length < 20 || report.length > 5_000) {
         return { error: "Raportul intervenției trebuie să conțină între 20 și 5.000 de caractere.", status: 400 as const };
