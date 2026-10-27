@@ -264,10 +264,10 @@ export function InterventionOperationsSection({
   const siteMeasurementLengthMeters = Number(siteMeasurementLength);
   const siteMeasurementReady = !siteMeasurementEnabled || Boolean(siteMeasurementCode.trim())
     && Number.isFinite(siteMeasurementLengthMeters) && siteMeasurementLengthMeters > 0
-    && validSiteMeasurementPhotos.length > 0;
+    && (canEdit || validSiteMeasurementPhotos.length > 0);
   const orangeIntervention = project.activityType === "Intervenție Orange";
-  const requiredAssessmentPhotos = damageType === "FO cut" ? 3 : 1;
-  const assessmentPhotosReady = validPhotos.length >= requiredAssessmentPhotos;
+  const requiredAssessmentPhotos = canEdit ? 0 : damageType === "FO cut" ? 3 : 1;
+  const assessmentPhotosReady = canEdit || validPhotos.length >= requiredAssessmentPhotos;
   const completedItems = Number(Boolean(damageType)) + Number(assessmentPhotosReady) + Number(!orangeIntervention || Boolean(damageLocation)) + Number(!orangeIntervention || Boolean(cause));
   const progress = Math.round((completedItems / (orangeIntervention ? 4 : 2)) * 100);
   const ready = Boolean(damageType) && Boolean(arrivedAt) && Boolean(incidentDescription.trim()) && assessmentPhotosReady && siteMeasurementReady && (!orangeIntervention || (Boolean(cause) && Boolean(damageLocation)));
@@ -571,8 +571,8 @@ export function InterventionOperationsSection({
               {orangeIntervention && <DamageLocationPicker value={damageLocation} onChange={(location) => setDamageLocation({ ...location, placedAt: Date.now() })} onNotify={onNotify} />}
 
               <div className="intervention-photo-heading">
-                <div><h3>Fotografii constatare</h3><p>{damageType === "FO cut" ? "Pentru FO cut sunt obligatorii minimum 3 imagini clare." : "Imagini clare din care reiese natura avariei."}</p></div>
-                <span>{validPhotos.length}/{requiredAssessmentPhotos} poze GPS</span>
+                <div><h3>Fotografii constatare</h3><p>{canEdit ? "Opționale pentru coordonator; imaginile încărcate pot fi interpretate automat." : damageType === "FO cut" ? "Pentru FO cut sunt obligatorii minimum 3 imagini clare." : "Imagini clare din care reiese natura avariei."}</p></div>
+                <span>{canEdit ? `${validPhotos.length} poze GPS · opțional` : `${validPhotos.length}/${requiredAssessmentPhotos} poze GPS`}</span>
               </div>
 
               <label className={`intervention-photo-upload${uploading ? " is-uploading" : ""}`}>
@@ -664,9 +664,9 @@ export function InterventionOperationsSection({
               <div className={damageType ? "done" : ""}><span>{damageType ? "✓" : "○"}</span><p><strong>Tipul avariei</strong><small>{damageType || "În așteptare"}</small></p></div>
               {orangeIntervention && <div className={cause ? "done" : ""}><span>{cause ? "✓" : "○"}</span><p><strong>Cauza avariei</strong><small>{cause || "Selectează cauza"}</small></p></div>}
               {orangeIntervention && <div className={damageLocation ? "done" : ""}><span>{damageLocation ? "✓" : "○"}</span><p><strong>Locația avariei</strong><small>{damageLocation ? `${damageLocation.lat.toFixed(6)}, ${damageLocation.lon.toFixed(6)}` : "Amplasează punctul pe hartă"}</small></p></div>}
-              <div className={assessmentPhotosReady ? "done" : ""}><span>{assessmentPhotosReady ? "✓" : "○"}</span><p><strong>Fotografii geotagate</strong><small>{assessmentPhotosReady ? `${validPhotos.length} fotografii cu GPS valid` : `Minimum ${requiredAssessmentPhotos} ${requiredAssessmentPhotos === 1 ? "fotografie obligatorie" : "fotografii obligatorii"}`}</small></p></div>
+              <div className={assessmentPhotosReady ? "done" : ""}><span>{assessmentPhotosReady ? "✓" : "○"}</span><p><strong>Fotografii geotagate</strong><small>{canEdit ? `${validPhotos.length} fotografii · opționale pentru coordonator` : assessmentPhotosReady ? `${validPhotos.length} fotografii cu GPS valid` : `Minimum ${requiredAssessmentPhotos} ${requiredAssessmentPhotos === 1 ? "fotografie obligatorie" : "fotografii obligatorii"}`}</small></p></div>
             </div>
-            <div className="geo-notice"><span>⌖</span><p><strong>GPS, dată și oră obligatorii</strong>Fotografiile sunt marcate direct cu poziția, data și ora constatării.</p></div>
+            <div className="geo-notice"><span>⌖</span><p><strong>{canEdit ? "Fotografii opționale pentru coordonator" : "GPS, dată și oră obligatorii"}</strong>{canEdit ? "Dacă încarci fotografii WhatsApp, OpenAI poate extrage poziția, data, ora și informațiile tehnice." : "Fotografiile sunt marcate direct cu poziția, data și ora constatării."}</p></div>
             {initialSummary?.assessment?.documentedAt && <p className="intervention-saved-note">Salvată: {formatCapturedAt(initialSummary.assessment.documentedAt)}</p>}
             <button className="primary-button submit-documentation" type="submit" disabled={!ready || saving || uploading || loadingPhotos}>{saving ? "Se salvează..." : "Salvează constatarea"} <span>→</span></button>
           </aside>
