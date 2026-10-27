@@ -688,7 +688,8 @@ export async function saveFieldDocumentation(projectId: string, section: string,
       execution?: Partial<InterventionExecutionSummary>;
       documentation?: Partial<InterventionDocumentationSummary>;
     };
-    if (intervention.documentation && !isManagementRole(account)) {
+    const managementMode = isManagementRole(account);
+    if (intervention.documentation && !managementMode) {
       return { error: "Documentarea și închiderea intervenției sunt rezervate administratorului, managerului sau coordonatorului.", status: 403 as const };
     }
     const assessment = intervention?.assessment;
@@ -722,7 +723,7 @@ export async function saveFieldDocumentation(projectId: string, section: string,
 
     const validDamagePhotos = (photos.results ?? []).filter((photo) => photo.category === "damage" && hasValidPhotoCoordinates(photo.geolocation)).length;
     const requiredDamagePhotos = assessment.damageType === "FO cut" ? 3 : 1;
-    if (validDamagePhotos < requiredDamagePhotos) {
+    if (!managementMode && validDamagePhotos < requiredDamagePhotos) {
       return { error: assessment.damageType === "FO cut" ? "Pentru FO cut sunt obligatorii cel puțin 3 fotografii cu coordonate GPS valide." : "Încarcă cel puțin o fotografie a avariei cu coordonate GPS valide.", status: 400 as const };
     }
     if (assessment.siteMeasurement) {
@@ -731,7 +732,7 @@ export async function saveFieldDocumentation(projectId: string, section: string,
       if (!siteCode || siteCode.length > 50 || !Number.isFinite(length) || length <= 0 || length > 1_000_000) {
         return { error: "Completează codul site-ului și lungimea validă a măsurătorii OTDR.", status: 400 as const };
       }
-      if (!(photos.results ?? []).some((photo) => photo.category === "site-measurement" && hasValidPhotoCoordinates(photo.geolocation))) {
+      if (!managementMode && !(photos.results ?? []).some((photo) => photo.category === "site-measurement" && hasValidPhotoCoordinates(photo.geolocation))) {
         return { error: "Adaugă fotografia cu GPS pentru măsurătoarea OTDR din site.", status: 400 as const };
       }
     }
@@ -792,7 +793,7 @@ export async function saveFieldDocumentation(projectId: string, section: string,
         const activityPhotos = item.type === "junction-installation"
           ? junctionCategories.filter((category) => geotaggedExecutionPhotos.some((photo) => photo.category === category)).length
           : geotaggedExecutionPhotos.filter((photo) => photo.category === `${item.id}:photo`).length;
-        if (activityPhotos < requiredPhotos) {
+        if (!managementMode && activityPhotos < requiredPhotos) {
           return { error: item.type === "fo-installation"
             ? `Pentru ${item.cableLengthMeters} m de cablu aerian sunt obligatorii minimum ${requiredPhotos} fotografii GPS ale instalării FO.`
             : item.type === "junction-installation"
