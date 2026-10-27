@@ -389,8 +389,11 @@ test("Orange centralizers use assessed cable capacity and coordinator SLA NICM c
   assert.match(centralizer, /incident: validated\?\.incidentInSla/);
   assert.match(centralizer, /details: validated\?\.nicmUpdateRequired/);
   assert.match(oneDrive, /desiredValues\[17\] = assessment\?\.cableCapacity \?\? project\.cable_capacity/);
-  assert.match(oneDrive, /desiredValues\[20\] = documentation\?\.incidentInSla/);
-  assert.match(oneDrive, /desiredValues\[23\] = documentation\?\.nicmUpdateRequired/);
+  assert.match(oneDrive, /desiredValues\[24\] = documentation\?\.incidentInSla/);
+  assert.match(oneDrive, /desiredValues\[25\] = documentation\?\.nicmUpdateRequired/);
+  assert.doesNotMatch(oneDrive, /desiredValues\[20\] = documentation\?\.incidentInSla|desiredValues\[23\] = documentation\?\.nicmUpdateRequired/);
+  assert.match(centralizer, /textCell\(`Y\$\{row\}`, value\.incident/);
+  assert.match(centralizer, /textCell\(`Z\$\{row\}`, value\.details/);
 });
 
 test("Orange KMZ names use the normalized ticket number", async () => {
