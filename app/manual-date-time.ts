@@ -70,7 +70,7 @@ export function romanianDateTimeToTimestamp(date: string, time: string) {
     timestamp += desired - represented;
   }
   const rendered = bucharestParts(timestamp);
-  return rendered.date === date.trim().replace(/[\/-]/g, ".").replace(/^(\d)(\.)/, "0$1$2").replace(/\.(\d)\./, ".0$1.")
+  return rendered.date === isoDateToRomanian(romanianDateToIso(date))
     && rendered.time === time.trim()
     ? timestamp
     : null;
