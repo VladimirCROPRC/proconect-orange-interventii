@@ -13,6 +13,7 @@ export type StoredProjectFile = {
 };
 
 const fieldPhotoSections = new Set(["safety", "client", "route", "splices", "site", "intervention-assessment", "intervention-execution"]);
+const resizedPhotoSections = new Set(["intervention-documentation"]);
 
 async function getPhotoGeolocation() {
   if (typeof window === "undefined" || !window.isSecureContext || !navigator.geolocation) {
@@ -141,6 +142,33 @@ async function stampFieldPhoto(file: File, geo: string, capturedAt: number) {
   return new File([blob], filename, { type: "image/jpeg", lastModified: capturedAt });
 }
 
+async function resizeStoredPhoto(file: File, capturedAt: number) {
+  const source = await loadPhoto(file);
+  const canvas = document.createElement("canvas");
+  const isLandscape = source.width >= source.height;
+  const maximumWidth = isLandscape ? 1024 : 768;
+  const maximumHeight = isLandscape ? 768 : 1024;
+  const scale = Math.min(1, maximumWidth / source.width, maximumHeight / source.height);
+  canvas.width = Math.max(1, Math.round(source.width * scale));
+  canvas.height = Math.max(1, Math.round(source.height * scale));
+  const context = canvas.getContext("2d");
+  if (!context) {
+    source.release();
+    throw new Error("Fotografia nu a putut fi pregătită pentru încărcare.");
+  }
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.drawImage(source.image, 0, 0, canvas.width, canvas.height);
+  source.release();
+  const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob(
+    (result) => result ? resolve(result) : reject(new Error("Fotografia nu a putut fi pregătită pentru încărcare.")),
+    "image/jpeg",
+    0.82,
+  ));
+  const filename = /\.jpe?g$/i.test(file.name) ? file.name : `${file.name.replace(/\.[^.]+$/, "") || "fotografie"}.jpg`;
+  return new File([blob], filename, { type: "image/jpeg", lastModified: capturedAt });
+}
+
 export async function uploadProjectFile(input: {
   projectId: string;
   section: string;
@@ -152,7 +180,11 @@ export async function uploadProjectFile(input: {
   const isFieldPhoto = fieldPhotoSections.has(input.section) && input.file.type.startsWith("image/");
   const geo = isFieldPhoto ? input.geo?.trim() || await getPhotoGeolocation() : input.geo;
   const capturedAt = typeof input.capturedAt === "number" && Number.isFinite(input.capturedAt) ? input.capturedAt : Date.now();
-  const file = isFieldPhoto ? await stampFieldPhoto(input.file, geo || "GPS indisponibil", capturedAt) : input.file;
+  const file = isFieldPhoto
+    ? await stampFieldPhoto(input.file, geo || "GPS indisponibil", capturedAt)
+    : resizedPhotoSections.has(input.section) && input.file.type.startsWith("image/")
+      ? await resizeStoredPhoto(input.file, capturedAt)
+      : input.file;
 
   const form = new FormData();
   form.set("projectId", input.projectId);
