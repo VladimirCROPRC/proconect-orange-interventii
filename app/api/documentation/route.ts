@@ -1,6 +1,6 @@
 import { waitUntil } from "cloudflare:workers";
 import { saveFieldDocumentation } from "../../project-server";
-import { syncReportIfConnected } from "../../backup-server";
+import { syncFinalizedReportIfConnected, syncReportIfConnected } from "../../backup-server";
 import { currentSession, sameOrigin } from "../../server-auth";
 
 export const dynamic = "force-dynamic";
@@ -17,8 +17,13 @@ export async function PATCH(request: Request) {
     const result = await saveFieldDocumentation(body.projectId, body.section, body.content, session.account);
     if ("error" in result) return Response.json({ error: result.error }, { status: result.status });
     // The database save is complete. External exports must not delay its acknowledgement.
-    waitUntil(syncReportIfConnected(body.projectId).catch(() => {
-      console.error("Drive report refresh requires retry");
+    // Finalization gets an immediate per-ticket QAF export; intermediate field
+    // saves remain queued and retryable.
+    const refresh = result.project
+      ? syncFinalizedReportIfConnected(body.projectId)
+      : syncReportIfConnected(body.projectId);
+    waitUntil(refresh.catch(() => {
+      console.error(result.project ? "Final QAF refresh requires retry" : "Drive report refresh requires retry");
     }));
     return Response.json({ documentation: result.documentation, ...(result.project ? { project: result.project } : {}) });
   } catch (error) {
