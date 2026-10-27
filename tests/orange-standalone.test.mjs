@@ -365,6 +365,15 @@ test("management can save assessment and execution without mandatory photos", as
 });
 
 
+test("Orange KMZ names use the normalized ticket number", async () => {
+  const kmz = await source("app/orange-kmz.ts");
+  assert.match(kmz, /const ticketName = `\$\{ticket\.type\}\$\{ticket\.number\}`/);
+  assert.match(kmz, /points\.push\(\{ name: ticketName,/);
+  assert.match(kmz, /name: `J\$\{index \+ 1\}_\$\{ticketName\}`/);
+  assert.match(kmz, /\^\(IMO\|FITT\|PBM\)0\*\(\\d\+\)\$/);
+  assert.doesNotMatch(kmz, /name: ticket\.number/);
+});
+
 test("closing an Orange ticket publishes the final QAF before queued files", async () => {
   const route = await source("app/api/documentation/route.ts");
   const backup = await source("app/backup-server.ts");
