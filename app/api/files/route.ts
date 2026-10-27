@@ -37,6 +37,10 @@ export async function POST(request: Request) {
     const category = form.get("category");
     const file = form.get("file");
     const geo = form.get("geo");
+    const requestedCapturedAt = Number(form.get("capturedAt") || 0);
+    const capturedAt = requestedCapturedAt >= Date.UTC(2000, 0, 1) && requestedCapturedAt <= Date.now() + 24 * 60 * 60 * 1000
+      ? requestedCapturedAt
+      : Date.now();
     if (typeof projectId !== "string" || typeof section !== "string" || typeof category !== "string" || !(file instanceof File)) {
       return Response.json({ error: "Datele fișierului nu sunt complete." }, { status: 400 });
     }
@@ -74,7 +78,7 @@ export async function POST(request: Request) {
     }
     const validation = validateUpload(section, category, file);
     if (validation) return Response.json({ error: validation }, { status: 400 });
-    const result = await storeFile({ projectId, section, category, file, geo: typeof geo === "string" ? geo.slice(0, 250) : "", uploadedBy: session.account.username });
+    const result = await storeFile({ projectId, section, category, file, geo: typeof geo === "string" ? geo.slice(0, 250) : "", capturedAt, uploadedBy: session.account.username });
     try {
       await syncFileIfConnected(result.id);
     } catch (error) {
