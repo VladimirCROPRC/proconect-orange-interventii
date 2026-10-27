@@ -368,6 +368,13 @@ export async function syncOrangeTicketWorkbook(projectId: string) {
     if (Array.isArray(parsed)) previousAppValues = parsed;
   } catch { previousAppValues = null; }
   const merged = preserveManualWorkbookCells(currentValues, desiredValues, previousAppValues, managedIndexes, targetIndex < 0);
+  const foSectionName = project.fo_section_name.trim();
+  if (foSectionName) {
+    // "Tronson FO" is authoritative from "Denumirea tronsonului FO" in the app.
+    // A blank app field still preserves a manually populated workbook cell.
+    merged.values[1] = foSectionName;
+    merged.appValues[1] = foSectionName;
+  }
 
   if (targetIndex >= 0) {
     // Microsoft Graph treats null as "ignore this cell" for range updates.
