@@ -63,7 +63,7 @@ type StorageEnvironment = {
 };
 
 const storageEnvironment = env as unknown as StorageEnvironment;
-const fileSections = new Set(["project", "safety", "client", "route", "splices", "site", "documents", "intervention-assessment", "intervention-execution"]);
+const fileSections = new Set(["project", "safety", "client", "route", "splices", "site", "documents", "intervention-assessment", "intervention-execution", "intervention-documentation"]);
 const maximumUploadBytes = 20 * 1024 * 1024;
 const mediaConverterTypes = new Set(["100 Mbps", "1 Gbps", "JumboFrame"]);
 
