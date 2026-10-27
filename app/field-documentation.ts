@@ -171,6 +171,8 @@ export type InterventionServiceSelection = {
   quantity: number;
 };
 
+export type InterventionCentralizerChoice = "Y" | "N" | "N/A";
+
 export type InterventionDocumentationSummary = {
   report: string;
   incidentDescription?: string;
@@ -180,6 +182,8 @@ export type InterventionDocumentationSummary = {
   completedByTechnicians?: string[];
   closingDate?: string;
   closingTime?: string;
+  incidentInSla?: InterventionCentralizerChoice;
+  nicmUpdateRequired?: InterventionCentralizerChoice;
   validatedAt: number;
   validatedBy: string;
 };
