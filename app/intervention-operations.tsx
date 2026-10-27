@@ -292,7 +292,7 @@ export function InterventionOperationsSection({
   const reportReady = report.trim().length >= 20 && report.trim().length <= 5_000;
   const closingDate = romanianDateToIso(closingDateInput);
   const closingDateReady = /^\d{4}-\d{2}-\d{2}$/.test(closingDate);
-  const closingTimeReady = /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(closingTime);
+  const closingTimeReady = validManualTime(closingTime);
   const canFinalize = Boolean(canEdit && initialSummary?.assessment && executionActivities.length && reportReady && closingDateReady && closingTimeReady && project.status !== "Finalizat");
 
   async function addPhotos(selectedFiles: File[], category: "damage" | "site-measurement" = "damage") {
