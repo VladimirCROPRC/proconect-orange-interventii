@@ -192,7 +192,7 @@ export async function uploadProjectFile(input: {
   form.set("category", input.category);
   form.set("file", file, file.name);
   if (geo) form.set("geo", geo);
-  if (isFieldPhoto) form.set("capturedAt", String(capturedAt));
+  if (isFieldPhoto || resizedPhotoSections.has(input.section)) form.set("capturedAt", String(capturedAt));
 
   const response = await fetch("/api/files", { method: "POST", credentials: "same-origin", body: form });
   const responseText = await response.text();
