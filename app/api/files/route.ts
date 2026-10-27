@@ -44,7 +44,7 @@ export async function POST(request: Request) {
     if (typeof projectId !== "string" || typeof section !== "string" || typeof category !== "string" || !(file instanceof File)) {
       return Response.json({ error: "Datele fișierului nu sunt complete." }, { status: 400 });
     }
-    if ((section === "project" || section === "documents") && !isManagementRole(session.account)) {
+    if ((section === "project" || section === "documents" || section === "intervention-documentation") && !isManagementRole(session.account)) {
       return Response.json({ error: "Încărcarea documentelor proiectului este rezervată administratorului." }, { status: 403 });
     }
     const project = await getAuthorizedProject(projectId, session.account);
@@ -64,6 +64,14 @@ export async function POST(request: Request) {
       }
     } else if (!(await hasCompletedProjectSafety(projectId, session.account))) {
       return Response.json({ error: "Încarcă fotografiile Pretask și EIP înainte de accesarea lucrării." }, { status: 403 });
+    }
+    if (section === "intervention-documentation") {
+      if (project.activity_type !== "Intervenție Orange") {
+        return Response.json({ error: "Încărcarea bulk din Documentare este disponibilă numai pentru tichetele Orange.", status: 400 });
+      }
+      if (category !== "bulk-photo") {
+        return Response.json({ error: "Categoria fotografiei din Documentare nu este validă.", status: 400 });
+      }
     }
     if (section === "intervention-assessment" || section === "intervention-execution") {
       if (project.activity_type !== "Intervenție" && project.activity_type !== "Intervenție Orange") {
