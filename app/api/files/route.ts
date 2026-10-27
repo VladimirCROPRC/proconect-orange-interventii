@@ -108,7 +108,7 @@ export async function DELETE(request: Request) {
     if (typeof body.fileId !== "string") return Response.json({ error: "Fișierul nu a fost selectat." }, { status: 400 });
     const file = await getFileRow(body.fileId);
     if (!file || !(await getAuthorizedProject(file.project_id, session.account))) return Response.json({ error: "Fișier indisponibil." }, { status: 404 });
-    if ((file.section === "project" || file.section === "documents") && !isManagementRole(session.account)) {
+    if ((file.section === "project" || file.section === "documents" || file.section === "intervention-documentation") && !isManagementRole(session.account)) {
       return Response.json({ error: "Ștergerea acestui document este rezervată administratorului." }, { status: 403 });
     }
     if (file.section === "safety" && !isManagementRole(session.account)) {
