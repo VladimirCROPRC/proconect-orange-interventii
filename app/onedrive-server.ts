@@ -289,9 +289,9 @@ export async function syncOrangeTicketWorkbook(projectId: string) {
   if (!project || project.activity_type !== "Intervenție Orange") return { configured: true, written: false };
 
   let intervention: {
-    assessment?: { arrivedAt?: number; documentedAt?: number; incidentDescription?: string; damageLocation?: { lat?: number; lon?: number; placedAt?: number } };
+    assessment?: { arrivedAt?: number; documentedAt?: number; incidentDescription?: string; cableCapacity?: number; damageLocation?: { lat?: number; lon?: number; placedAt?: number } };
     execution?: { remediationDescription?: string };
-    documentation?: { validatedAt?: number; validatedBy?: string; completedByTechnicians?: string[]; closingDate?: string; closingTime?: string; incidentDescription?: string; remediationDescription?: string };
+    documentation?: { validatedAt?: number; validatedBy?: string; completedByTechnicians?: string[]; closingDate?: string; closingTime?: string; incidentDescription?: string; remediationDescription?: string; incidentInSla?: string; nicmUpdateRequired?: string };
   } = {};
   try { intervention = project.documentation_json ? (JSON.parse(project.documentation_json).intervention ?? {}) : {}; } catch { intervention = {}; }
   const assessment = intervention.assessment;
@@ -352,12 +352,12 @@ export async function syncOrangeTicketWorkbook(projectId: string) {
   desiredValues[14] = assessment?.arrivedAt ? bucharestTimestamp(assessment.arrivedAt) : "";
   desiredValues[15] = damageLocation?.placedAt || assessment?.documentedAt ? bucharestTimestamp(damageLocation?.placedAt ?? assessment!.documentedAt!) : "";
   desiredValues[16] = orangeClosingTimestamp(documentation?.validatedAt, documentation?.closingDate, documentation?.closingTime);
-  desiredValues[17] = project.cable_capacity;
+  desiredValues[17] = assessment?.cableCapacity ?? project.cable_capacity;
   desiredValues[18] = incidentDescription;
-  desiredValues[20] = "";
+  desiredValues[20] = documentation?.incidentInSla ?? "";
   desiredValues[21] = remediationDescription;
   desiredValues[22] = typeof damageLocation?.lat === "number" && typeof damageLocation?.lon === "number" ? `${damageLocation.lat.toFixed(6)}, ${damageLocation.lon.toFixed(6)}` : "";
-  desiredValues[23] = "";
+  desiredValues[23] = documentation?.nicmUpdateRequired ?? "";
 
   const managedIndexes = [1, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16, 17, 18, 20, 21, 22, 23];
   const savedState = await getRawDb().prepare("SELECT values_json FROM orange_workbook_sync_state WHERE project_id = ? LIMIT 1")
