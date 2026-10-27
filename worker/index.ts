@@ -50,7 +50,9 @@ const worker = {
       // Field documentation already updates the Orange register and queues
       // QAF/KMZ regeneration. Let cron process that heavier export separately
       // so saving an activity stays within the request CPU budget.
-      && url.pathname !== "/api/documentation";
+      && url.pathname !== "/api/documentation"
+      // Photo interpretation does not modify ticket files or the centralizer.
+      && url.pathname !== "/api/photo-analysis";
     if (shouldDrainOneDrive) {
       ctx.waitUntil(drainOneDrive().catch(() => console.error("OneDrive background processing requires retry")));
     }
