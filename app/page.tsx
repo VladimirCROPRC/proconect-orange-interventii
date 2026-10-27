@@ -811,7 +811,7 @@ export default function Home() {
       mcType: (form.get("mc") === "on" ? String(form.get("mcType") || "") : "") as Project["mcType"],
       terminalBox: form.get("terminalBox") === "on",
       status: String(form.get("status") || editingProject.status) as Project["status"],
-      date: isOrangeForm ? orangeRequestDate : String(form.get("date") || editingProject.date),
+      date: isOrangeForm ? orangeRequestDate || editingProject.date : String(form.get("date") || editingProject.date),
       ipwo: ipwoFile ? ipwoName : editingProject.ipwo,
       splice: spliceFile ? spliceName : editingProject.splice,
     };
