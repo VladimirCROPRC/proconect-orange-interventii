@@ -252,7 +252,17 @@ test("mail preview recognizes the FITT and IMO message formats", async () => {
   assert.equal(imo.ticketId, "IMO000000313623");
   assert.equal(imo.siteA, "CR0129");
   assert.equal(imo.siteB, "CR0569");
-  assert.equal(imo.foSection, "FO CR0129_1 to CR0569_1");
+  assert.equal(imo.foSection, "RE: LOSS OF SIGNAL NEC CR0129 <> CR0569 /// IMO000000313623");
+});
+
+test("centralizers use the FO section name stored in the application", async () => {
+  const centralizer = await source("app/orange-centralizer.ts");
+  const oneDrive = await source("app/onedrive-server.ts");
+  assert.match(centralizer, /section: project\.fo_section_name/);
+  assert.match(centralizer, /textCell\(`B\$\{row\}`, value\.section\)/);
+  assert.match(oneDrive, /desiredValues\[1\] = project\.fo_section_name/);
+  assert.match(oneDrive, /merged\.values\[1\] = foSectionName/);
+  assert.match(oneDrive, /merged\.appValues\[1\] = foSectionName/);
 });
 
 test("automatic mail import is scheduled, deduplicated, and starts at activation", async () => {
