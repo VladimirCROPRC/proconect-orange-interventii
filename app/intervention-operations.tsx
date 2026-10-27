@@ -5,6 +5,7 @@ import { deleteProjectFile, fetchProjectFiles, formatCapturedAt, uploadProjectFi
 import { InterventionExecutionSection } from "./intervention-execution";
 import { DamageLocationPicker } from "./damage-location-picker";
 import { analysisCapturedAt, analysisCoordinates, analyzeCoordinatorPhoto } from "./photo-analysis-client";
+import { isoDateToRomanian, romanianDateToIso, romanianDateTimeToTimestamp, timestampToRomanianDateTime, validManualTime } from "./manual-date-time";
 import { OroSiteMapLink } from "./oro-lookup";
 import { orangeMaterials, proconectMaterials } from "./orange-materials";
 import { orangeServicePackages } from "./orange-services";
@@ -151,9 +152,15 @@ export function InterventionOperationsSection({
   onNotify,
   onSaved,
 }: InterventionOperationsProps) {
+  const initialArrivalInput = timestampToRomanianDateTime(initialSummary?.assessment?.arrivedAt);
+  const initialFindingInput = timestampToRomanianDateTime(initialSummary?.assessment?.damageLocation?.placedAt ?? initialSummary?.assessment?.documentedAt);
   const [damageType, setDamageType] = useState<InterventionDamageType | "">(initialSummary?.assessment?.damageType ?? "");
   const [cause, setCause] = useState<InterventionCause | "">(initialSummary?.assessment?.cause ?? "");
   const [arrivedAt, setArrivedAt] = useState(initialSummary?.assessment?.arrivedAt);
+  const [arrivalDateInput, setArrivalDateInput] = useState(initialArrivalInput.date);
+  const [arrivalTimeInput, setArrivalTimeInput] = useState(initialArrivalInput.time);
+  const [findingDateInput, setFindingDateInput] = useState(initialFindingInput.date);
+  const [findingTimeInput, setFindingTimeInput] = useState(initialFindingInput.time);
   const [incidentDescription, setIncidentDescription] = useState(initialSummary?.assessment?.incidentDescription ?? "");
   const [damageLocation, setDamageLocation] = useState(initialSummary?.assessment?.damageLocation);
   const [cableCapacity, setCableCapacity] = useState(initialSummary?.assessment?.cableCapacity?.toString() ?? (project.cableCapacity ? String(project.cableCapacity) : ""));
@@ -180,7 +187,7 @@ export function InterventionOperationsSection({
   const [reviewServices, setReviewServices] = useState(initialSummary?.documentation?.services ?? []);
   const [serviceCode, setServiceCode] = useState("");
   const [serviceQuantity, setServiceQuantity] = useState("1");
-  const [closingDate, setClosingDate] = useState(initialSummary?.documentation?.closingDate ?? "");
+  const [closingDateInput, setClosingDateInput] = useState(isoDateToRomanian(initialSummary?.documentation?.closingDate));
   const [closingTime, setClosingTime] = useState(initialSummary?.documentation?.closingTime ?? "");
 
   useEffect(() => {
@@ -190,6 +197,12 @@ export function InterventionOperationsSection({
       setDamageType(initialSummary?.assessment?.damageType ?? "");
       setCause(initialSummary?.assessment?.cause ?? "");
       setArrivedAt(initialSummary?.assessment?.arrivedAt);
+      const arrival = timestampToRomanianDateTime(initialSummary?.assessment?.arrivedAt);
+      const finding = timestampToRomanianDateTime(initialSummary?.assessment?.damageLocation?.placedAt ?? initialSummary?.assessment?.documentedAt);
+      setArrivalDateInput(arrival.date);
+      setArrivalTimeInput(arrival.time);
+      setFindingDateInput(finding.date);
+      setFindingTimeInput(finding.time);
       setIncidentDescription(initialSummary?.assessment?.incidentDescription ?? "");
       setDamageLocation(initialSummary?.assessment?.damageLocation);
       setCableCapacity(initialSummary?.assessment?.cableCapacity?.toString() ?? (project.cableCapacity ? String(project.cableCapacity) : ""));
@@ -247,7 +260,7 @@ export function InterventionOperationsSection({
       if (mounted) setSelectedWarehouseId(initialSummary?.documentation?.warehouseId ?? "");
       if (mounted) setReviewServices(initialSummary?.documentation?.services ?? []);
       if (mounted) setCompletedByTechnicians(initialSummary?.documentation?.completedByTechnicians ?? []);
-      if (mounted) setClosingDate(initialSummary?.documentation?.closingDate ?? "");
+      if (mounted) setClosingDateInput(isoDateToRomanian(initialSummary?.documentation?.closingDate));
       if (mounted) setClosingTime(initialSummary?.documentation?.closingTime ?? "");
     });
     return () => {
@@ -266,15 +279,18 @@ export function InterventionOperationsSection({
     && Number.isFinite(siteMeasurementLengthMeters) && siteMeasurementLengthMeters > 0
     && (canEdit || validSiteMeasurementPhotos.length > 0);
   const orangeIntervention = project.activityType === "Intervenție Orange";
+  const manualArrivedAt = canEdit ? romanianDateTimeToTimestamp(arrivalDateInput, arrivalTimeInput) : arrivedAt ?? null;
+  const manualFindingAt = canEdit ? romanianDateTimeToTimestamp(findingDateInput, findingTimeInput) : initialSummary?.assessment?.documentedAt ?? null;
   const requiredAssessmentPhotos = canEdit ? 0 : damageType === "FO cut" ? 3 : 1;
   const assessmentPhotosReady = canEdit || validPhotos.length >= requiredAssessmentPhotos;
   const completedItems = Number(Boolean(damageType)) + Number(assessmentPhotosReady) + Number(!orangeIntervention || Boolean(damageLocation)) + Number(!orangeIntervention || Boolean(cause));
   const progress = Math.round((completedItems / (orangeIntervention ? 4 : 2)) * 100);
-  const ready = Boolean(damageType) && Boolean(arrivedAt) && Boolean(incidentDescription.trim()) && assessmentPhotosReady && siteMeasurementReady && (!orangeIntervention || (Boolean(cause) && Boolean(damageLocation)));
+  const ready = Boolean(damageType) && Boolean(manualArrivedAt) && Boolean(!canEdit || manualFindingAt) && Boolean(incidentDescription.trim()) && assessmentPhotosReady && siteMeasurementReady && (!orangeIntervention || (Boolean(cause) && Boolean(damageLocation)));
   const executionActivities = initialSummary?.execution?.activities ?? [];
   const totalExecutionPhotos = executionActivities.reduce((total, activity) => total + activity.photoCount, 0);
   const totalCableMeters = executionActivities.reduce((total, activity) => total + (activity.type === "fo-installation" ? activity.cableLengthMeters ?? 0 : 0), 0);
   const reportReady = report.trim().length >= 20 && report.trim().length <= 5_000;
+  const closingDate = romanianDateToIso(closingDateInput);
   const closingDateReady = /^\d{4}-\d{2}-\d{2}$/.test(closingDate);
   const closingTimeReady = /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(closingTime);
   const canFinalize = Boolean(canEdit && initialSummary?.assessment && executionActivities.length && reportReady && closingDateReady && closingTimeReady && project.status !== "Finalizat");
@@ -295,6 +311,11 @@ export function InterventionOperationsSection({
           geo = coordinates.geo;
           capturedAt = analysisCapturedAt(analysis);
           if (category === "damage") {
+            const captured = timestampToRomanianDateTime(capturedAt);
+            setArrivalDateInput((current) => current || captured.date);
+            setArrivalTimeInput((current) => current || captured.time);
+            setFindingDateInput((current) => current || captured.date);
+            setFindingTimeInput((current) => current || captured.time);
             setDamageLocation((current) => current ?? { lat: coordinates.lat, lon: coordinates.lon, placedAt: capturedAt });
             setArrivedAt((current) => current ?? capturedAt);
             setIncidentDescription((current) => current.trim() ? current : analysis.incidentDescription || analysis.summary);
@@ -347,9 +368,10 @@ export function InterventionOperationsSection({
 
   async function saveAssessment(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!damageType || !arrivedAt || !incidentDescription.trim() || !assessmentPhotosReady || !siteMeasurementReady || (orangeIntervention && (!cause || !damageLocation || !cableDetailsReady))) {
+    if (!damageType || !manualArrivedAt || (canEdit && !manualFindingAt) || !incidentDescription.trim() || !assessmentPhotosReady || !siteMeasurementReady || (orangeIntervention && (!cause || !damageLocation || !cableDetailsReady))) {
       setError(!siteMeasurementReady
         ? canEdit ? "Completează codul site-ului și lungimea OTDR." : "Completează codul site-ului, lungimea OTDR și fotografia măsurătorii cu GPS valid."
+        : canEdit && (!manualArrivedAt || !manualFindingAt) ? "Completează data și ora ajungerii și constatării în formatul indicat."
         : !cableDetailsReady ? "Completează capacitatea cablului și tipul traseului constatate în teren."
         : !assessmentPhotosReady ? (damageType === "FO cut" ? "Pentru FO cut sunt obligatorii cel puțin 3 fotografii cu GPS valid." : "Adaugă cel puțin o fotografie cu GPS valid.")
         : orangeIntervention ? "Selectează tipul și cauza avariei și amplasează locația pe hartă." : "Selectează tipul avariei.");
@@ -364,9 +386,9 @@ export function InterventionOperationsSection({
         assessment: {
           damageType,
           ...(cause ? { cause } : {}),
-          ...(arrivedAt ? { arrivedAt } : {}),
+          arrivedAt: manualArrivedAt,
           incidentDescription: incidentDescription.trim(),
-          ...(damageLocation ? { damageLocation } : {}),
+          ...(damageLocation ? { damageLocation: { ...damageLocation, placedAt: manualFindingAt ?? damageLocation.placedAt } } : {}),
           cableCapacity: assessedCableCapacity,
           routeType: routeType!,
           ...(siteMeasurementEnabled ? { siteMeasurement: {
@@ -376,7 +398,7 @@ export function InterventionOperationsSection({
           } } : {}),
           photoCount: damagePhotos.length,
           geotaggedPhotoCount: validPhotos.length,
-          documentedAt: Date.now(),
+          documentedAt: manualFindingAt ?? Date.now(),
         },
       });
       onNotify(`Constatarea intervenției ${project.id} a fost salvată.`);
@@ -516,11 +538,16 @@ export function InterventionOperationsSection({
 
             <div className="intervention-assessment-content">
               <div style={{ order: -3 }}>
-                <button className="primary-button" type="button" disabled={Boolean(arrivedAt)} onClick={() => {
+                {canEdit ? <div className="intervention-material-source-lists">
+                  <label className="intervention-damage-field"><span>Data ajungerii *</span><input type="text" inputMode="numeric" placeholder="ZZ.LL.AAAA" pattern="\\d{2}\\.\\d{2}\\.\\d{4}" value={arrivalDateInput} onChange={(event) => setArrivalDateInput(event.target.value)} required /></label>
+                  <label className="intervention-damage-field"><span>Ora ajungerii *</span><input type="text" inputMode="numeric" placeholder="HH:MM" pattern="(?:[01]\\d|2[0-3]):[0-5]\\d" value={arrivalTimeInput} onChange={(event) => setArrivalTimeInput(event.target.value)} required /></label>
+                  <label className="intervention-damage-field"><span>Data constatării *</span><input type="text" inputMode="numeric" placeholder="ZZ.LL.AAAA" pattern="\\d{2}\\.\\d{2}\\.\\d{4}" value={findingDateInput} onChange={(event) => setFindingDateInput(event.target.value)} required /></label>
+                  <label className="intervention-damage-field"><span>Ora constatării *</span><input type="text" inputMode="numeric" placeholder="HH:MM" pattern="(?:[01]\\d|2[0-3]):[0-5]\\d" value={findingTimeInput} onChange={(event) => setFindingTimeInput(event.target.value)} required /></label>
+                </div> : <button className="primary-button" type="button" disabled={Boolean(arrivedAt)} onClick={() => {
                   const timestamp = Date.now();
                   setArrivedAt(timestamp);
                   onNotify("Ora sosirii în zona avariei a fost înregistrată. Salvează constatarea pentru confirmare.");
-                }}>{arrivedAt ? `Ajuns în zonă · ${formatCapturedAt(arrivedAt)}` : "Am ajuns în zona avariei"}</button>
+                }}>{arrivedAt ? `Ajuns în zonă · ${formatCapturedAt(arrivedAt)}` : "Am ajuns în zona avariei"}</button>}
               </div>
               <label className="intervention-damage-field">
                 <span>Tipul avariei <b>OBLIGATORIU</b></span>
@@ -705,8 +732,8 @@ export function InterventionOperationsSection({
               <label className="intervention-damage-field"><span>Descriere incident validată</span><textarea rows={5} maxLength={2000} value={reviewIncident} onChange={(event) => setReviewIncident(event.target.value)} /></label>
               <label className="intervention-damage-field"><span>Descriere remediere validată</span><textarea rows={5} maxLength={2000} value={reviewRemediation} onChange={(event) => setReviewRemediation(event.target.value)} /></label>
               <div className="intervention-material-source-lists">
-                <label className="intervention-damage-field"><span>Data închiderii *</span><input type="date" required value={closingDate} readOnly={project.status === "Finalizat"} onChange={(event) => setClosingDate(event.target.value)} /></label>
-                <label className="intervention-damage-field"><span>Ora de închidere *</span><input type="time" required value={closingTime} readOnly={project.status === "Finalizat"} onChange={(event) => setClosingTime(event.target.value)} /></label>
+                <label className="intervention-damage-field"><span>Data închiderii *</span><input type="text" inputMode="numeric" placeholder="ZZ.LL.AAAA" pattern="\\d{2}\\.\\d{2}\\.\\d{4}" required value={closingDateInput} readOnly={project.status === "Finalizat"} onChange={(event) => setClosingDateInput(event.target.value)} /></label>
+                <label className="intervention-damage-field"><span>Ora de închidere *</span><input type="text" inputMode="numeric" placeholder="HH:MM" pattern="(?:[01]\\d|2[0-3]):[0-5]\\d" required value={closingTime} readOnly={project.status === "Finalizat"} onChange={(event) => setClosingTime(event.target.value)} /></label>
               </div>
               <small>Data și ora sunt introduse manual de coordonator și se transmit în QAF și Centralizator.</small>
 
