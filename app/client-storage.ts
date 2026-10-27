@@ -147,10 +147,12 @@ export async function uploadProjectFile(input: {
   category: string;
   file: File;
   geo?: string;
+  capturedAt?: number;
 }): Promise<StoredProjectFile> {
   const isFieldPhoto = fieldPhotoSections.has(input.section) && input.file.type.startsWith("image/");
   const geo = isFieldPhoto ? input.geo?.trim() || await getPhotoGeolocation() : input.geo;
-  const file = isFieldPhoto ? await stampFieldPhoto(input.file, geo || "GPS indisponibil", Date.now()) : input.file;
+  const capturedAt = typeof input.capturedAt === "number" && Number.isFinite(input.capturedAt) ? input.capturedAt : Date.now();
+  const file = isFieldPhoto ? await stampFieldPhoto(input.file, geo || "GPS indisponibil", capturedAt) : input.file;
 
   const form = new FormData();
   form.set("projectId", input.projectId);
@@ -158,6 +160,7 @@ export async function uploadProjectFile(input: {
   form.set("category", input.category);
   form.set("file", file, file.name);
   if (geo) form.set("geo", geo);
+  if (isFieldPhoto) form.set("capturedAt", String(capturedAt));
 
   const response = await fetch("/api/files", { method: "POST", credentials: "same-origin", body: form });
   const responseText = await response.text();
