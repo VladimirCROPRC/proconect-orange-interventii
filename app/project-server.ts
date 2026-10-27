@@ -984,7 +984,7 @@ function fileMetadata(row: StoredFileRow) {
   };
 }
 
-export async function storeFile(input: { projectId: string; section: string; category: string; file: File; geo: string; uploadedBy: string }) {
+export async function storeFile(input: { projectId: string; section: string; category: string; file: File; geo: string; capturedAt?: number; uploadedBy: string }) {
   const id = crypto.randomUUID();
   const safeName = input.file.name.normalize("NFKD").replace(/[^a-zA-Z0-9._-]/g, "_").slice(-150);
   const key = `${input.projectId}/${input.section}/${input.category}/${id}-${safeName || "fisier"}`;
@@ -994,12 +994,13 @@ export async function storeFile(input: { projectId: string; section: string; cat
     customMetadata: { projectId: input.projectId, section: input.section, category: input.category },
   });
   const now = Date.now();
+  const capturedAt = typeof input.capturedAt === "number" && Number.isFinite(input.capturedAt) ? input.capturedAt : now;
   try {
     await getRawDb()
       .prepare(
         "INSERT INTO project_files (id, project_id, section, category, original_name, content_type, byte_size, storage_key, geolocation, captured_at, uploaded_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       )
-      .bind(id, input.projectId, input.section, input.category, input.file.name, contentType, input.file.size, key, input.geo, now, input.uploadedBy, now)
+      .bind(id, input.projectId, input.section, input.category, input.file.name, contentType, input.file.size, key, input.geo, capturedAt, input.uploadedBy, now)
       .run();
   } catch (error) {
     await bucket().delete(key);
@@ -1016,7 +1017,7 @@ export async function storeFile(input: { projectId: string; section: string; cat
     byte_size: input.file.size,
     storage_key: key,
     geolocation: input.geo,
-    captured_at: now,
+    captured_at: capturedAt,
     uploaded_by: input.uploadedBy,
     created_at: now,
   });
