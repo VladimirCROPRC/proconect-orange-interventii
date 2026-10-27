@@ -21,14 +21,15 @@ export async function buildOrangeKmz(projectId: string) {
     };
   };
   const ticket = ticketParts(projectId);
+  const ticketName = `${ticket.type}${ticket.number}`;
   const points: Array<{ name: string; lat: number; lon: number }> = [];
   const damage = content.intervention?.assessment?.damageLocation;
-  if (Number.isFinite(damage?.lat) && Number.isFinite(damage?.lon)) points.push({ name: ticket.number, lat: damage!.lat!, lon: damage!.lon! });
+  if (Number.isFinite(damage?.lat) && Number.isFinite(damage?.lon)) points.push({ name: ticketName, lat: damage!.lat!, lon: damage!.lon! });
   const junctions = (content.intervention?.execution?.activities ?? [])
     .filter((activity) => activity.type === "junction-installation" && activity.junction?.kind === "new" && Number.isFinite(activity.junction.lat) && Number.isFinite(activity.junction.lon))
     .slice(0, 4);
   junctions.forEach((activity, index) => points.push({
-    name: `J${index + 1}_${ticket.type}${ticket.number}`,
+    name: `J${index + 1}_${ticketName}`,
     lat: activity.junction!.lat!,
     lon: activity.junction!.lon!,
   }));
