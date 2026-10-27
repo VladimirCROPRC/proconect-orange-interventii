@@ -365,6 +365,24 @@ test("management can save assessment and execution without mandatory photos", as
 });
 
 
+test("Orange centralizers use assessed cable capacity and coordinator SLA NICM choices", async () => {
+  const operations = await source("app/intervention-operations.tsx");
+  const server = await source("app/project-server.ts");
+  const centralizer = await source("app/orange-centralizer.ts");
+  const oneDrive = await source("app/onedrive-server.ts");
+  assert.match(operations, /Incident în SLA/);
+  assert.match(operations, /Necesită actualizare în NICM/);
+  assert.match(operations, /incidentInSla: incidentInSla/);
+  assert.match(operations, /nicmUpdateRequired: nicmUpdateRequired/);
+  assert.match(server, /orangeCentralizerChoices/);
+  assert.match(centralizer, /capacity: assessment\?\.cableCapacity \?\? project\.cable_capacity/);
+  assert.match(centralizer, /incident: validated\?\.incidentInSla/);
+  assert.match(centralizer, /details: validated\?\.nicmUpdateRequired/);
+  assert.match(oneDrive, /desiredValues\[17\] = assessment\?\.cableCapacity \?\? project\.cable_capacity/);
+  assert.match(oneDrive, /desiredValues\[20\] = documentation\?\.incidentInSla/);
+  assert.match(oneDrive, /desiredValues\[23\] = documentation\?\.nicmUpdateRequired/);
+});
+
 test("Orange KMZ names use the normalized ticket number", async () => {
   const kmz = await source("app/orange-kmz.ts");
   assert.match(kmz, /const ticketName = `\$\{ticket\.type\}\$\{ticket\.number\}`/);
