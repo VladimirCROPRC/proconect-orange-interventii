@@ -822,8 +822,8 @@ export async function saveFieldDocumentation(projectId: string, section: string,
     }
 
     if (intervention.documentation) {
-      if (!intervention.execution?.activities?.length) {
-        return { error: "Înregistrează cel puțin o activitate de execuție înainte de închiderea intervenției.", status: 400 as const };
+      if (!intervention.execution || !Array.isArray(intervention.execution.activities)) {
+        return { error: "Salvează secțiunea Execuție înainte de închiderea intervenției.", status: 400 as const };
       }
       const report = typeof intervention.documentation.report === "string" ? intervention.documentation.report.trim() : "";
       if (report.length < 20 || report.length > 5_000) {
