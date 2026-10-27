@@ -5,7 +5,7 @@ import { deleteProjectFile, fetchProjectFiles, formatCapturedAt, uploadProjectFi
 import { InterventionExecutionSection } from "./intervention-execution";
 import { DamageLocationPicker } from "./damage-location-picker";
 import { analysisCapturedAt, analysisCoordinates, analyzeCoordinatorPhoto } from "./photo-analysis-client";
-import { isoDateToRomanian, romanianDateToIso, romanianDateTimeToTimestamp, timestampToRomanianDateTime, validManualTime } from "./manual-date-time";
+import { formatManualDateInput, formatManualTimeInput, isoDateToRomanian, romanianDateToIso, romanianDateTimeToTimestamp, timestampToRomanianDateTime, validManualTime } from "./manual-date-time";
 import { OroSiteMapLink } from "./oro-lookup";
 import { orangeMaterials, proconectMaterials } from "./orange-materials";
 import { orangeServicePackages } from "./orange-services";
@@ -539,10 +539,10 @@ export function InterventionOperationsSection({
             <div className="intervention-assessment-content">
               <div style={{ order: -3 }}>
                 {canEdit ? <div className="intervention-material-source-lists">
-                  <label className="intervention-damage-field"><span>Data ajungerii *</span><input type="text" inputMode="numeric" placeholder="ZZ.LL.AAAA" pattern="\\d{2}\\.\\d{2}\\.\\d{4}" value={arrivalDateInput} onChange={(event) => setArrivalDateInput(event.target.value)} required /></label>
-                  <label className="intervention-damage-field"><span>Ora ajungerii *</span><input type="text" inputMode="numeric" placeholder="HH:MM" pattern="(?:[01]\\d|2[0-3]):[0-5]\\d" value={arrivalTimeInput} onChange={(event) => setArrivalTimeInput(event.target.value)} required /></label>
-                  <label className="intervention-damage-field"><span>Data constatării *</span><input type="text" inputMode="numeric" placeholder="ZZ.LL.AAAA" pattern="\\d{2}\\.\\d{2}\\.\\d{4}" value={findingDateInput} onChange={(event) => setFindingDateInput(event.target.value)} required /></label>
-                  <label className="intervention-damage-field"><span>Ora constatării *</span><input type="text" inputMode="numeric" placeholder="HH:MM" pattern="(?:[01]\\d|2[0-3]):[0-5]\\d" value={findingTimeInput} onChange={(event) => setFindingTimeInput(event.target.value)} required /></label>
+                  <label className="intervention-damage-field"><span>Data ajungerii *</span><input type="text" inputMode="numeric" placeholder="ZZ.LL.AAAA" pattern={"\\d{2}\\.\\d{2}\\.\\d{4}"} maxLength={10} value={arrivalDateInput} onChange={(event) => setArrivalDateInput(formatManualDateInput(event.target.value))} required /></label>
+                  <label className="intervention-damage-field"><span>Ora ajungerii *</span><input type="text" inputMode="numeric" placeholder="HH:MM" pattern={"(?:[01]\\d|2[0-3]):[0-5]\\d"} maxLength={5} value={arrivalTimeInput} onChange={(event) => setArrivalTimeInput(formatManualTimeInput(event.target.value))} required /></label>
+                  <label className="intervention-damage-field"><span>Data constatării *</span><input type="text" inputMode="numeric" placeholder="ZZ.LL.AAAA" pattern={"\\d{2}\\.\\d{2}\\.\\d{4}"} maxLength={10} value={findingDateInput} onChange={(event) => setFindingDateInput(formatManualDateInput(event.target.value))} required /></label>
+                  <label className="intervention-damage-field"><span>Ora constatării *</span><input type="text" inputMode="numeric" placeholder="HH:MM" pattern={"(?:[01]\\d|2[0-3]):[0-5]\\d"} maxLength={5} value={findingTimeInput} onChange={(event) => setFindingTimeInput(formatManualTimeInput(event.target.value))} required /></label>
                 </div> : <button className="primary-button" type="button" disabled={Boolean(arrivedAt)} onClick={() => {
                   const timestamp = Date.now();
                   setArrivedAt(timestamp);
@@ -732,8 +732,8 @@ export function InterventionOperationsSection({
               <label className="intervention-damage-field"><span>Descriere incident validată</span><textarea rows={5} maxLength={2000} value={reviewIncident} onChange={(event) => setReviewIncident(event.target.value)} /></label>
               <label className="intervention-damage-field"><span>Descriere remediere validată</span><textarea rows={5} maxLength={2000} value={reviewRemediation} onChange={(event) => setReviewRemediation(event.target.value)} /></label>
               <div className="intervention-material-source-lists">
-                <label className="intervention-damage-field"><span>Data închiderii *</span><input type="text" inputMode="numeric" placeholder="ZZ.LL.AAAA" pattern="\\d{2}\\.\\d{2}\\.\\d{4}" required value={closingDateInput} readOnly={project.status === "Finalizat"} onChange={(event) => setClosingDateInput(event.target.value)} /></label>
-                <label className="intervention-damage-field"><span>Ora de închidere *</span><input type="text" inputMode="numeric" placeholder="HH:MM" pattern="(?:[01]\\d|2[0-3]):[0-5]\\d" required value={closingTime} readOnly={project.status === "Finalizat"} onChange={(event) => setClosingTime(event.target.value)} /></label>
+                <label className="intervention-damage-field"><span>Data închiderii *</span><input type="text" inputMode="numeric" placeholder="ZZ.LL.AAAA" pattern={"\\d{2}\\.\\d{2}\\.\\d{4}"} maxLength={10} required value={closingDateInput} readOnly={project.status === "Finalizat"} onChange={(event) => setClosingDateInput(formatManualDateInput(event.target.value))} /></label>
+                <label className="intervention-damage-field"><span>Ora de închidere *</span><input type="text" inputMode="numeric" placeholder="HH:MM" pattern={"(?:[01]\\d|2[0-3]):[0-5]\\d"} maxLength={5} required value={closingTime} readOnly={project.status === "Finalizat"} onChange={(event) => setClosingTime(formatManualTimeInput(event.target.value))} /></label>
               </div>
               <small>Data și ora sunt introduse manual de coordonator și se transmit în QAF și Centralizator.</small>
 
