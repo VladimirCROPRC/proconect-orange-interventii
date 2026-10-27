@@ -620,6 +620,28 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
     }
   }
 
+  async function saveExecutionWithoutActivity() {
+    if (!initialSummary?.assessment) {
+      onNotify("Salvează mai întâi constatarea.");
+      return;
+    }
+    if (draft) {
+      onNotify("Salvează sau anulează activitatea aflată în editare.");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    try {
+      await onSaved({ ...initialSummary, execution: { activities: [], materials, remediationDescription, documentedAt: Date.now() } });
+      setActivities([]);
+      onNotify("Execuția fără activități a fost salvată.");
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : "Execuția nu a putut fi salvată.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function saveRemediationDescription() {
     if (!remediationDescription.trim()) {
       onNotify("Descrie acțiunile întreprinse pentru remediere.");
@@ -851,6 +873,7 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
     </section>}
 
     <section className="project-card intervention-records-card"><div className="card-heading"><div><h2>Activități salvate</h2><p>{activities.length ? `${activities.length} ${activities.length === 1 ? "activitate documentată" : "activități documentate"} pentru tichetul ${project.id}.` : "Nicio activitate salvată pentru această intervenție."}</p></div></div>
+      {!activities.length && !draft && <button type="button" className="primary-button" onClick={() => void saveExecutionWithoutActivity()} disabled={saving || !initialSummary?.assessment}>{saving ? "Se salvează…" : "Salvează execuția fără activitate"}</button>}
       {activities.length > 0 && <div className="intervention-records-list">{activities.map((activity) => <article key={activity.id}><span>{activityCatalog[activity.type].badge}</span><div><strong>{activityCatalog[activity.type].title}</strong><small>{activity.type === "fo-installation" ? `${activity.endpointA?.code ?? "Joncțiunea A"} → ${activity.endpointB?.code ?? "Joncțiunea B"} · ${activity.cableType} · ${activity.cableLengthMeters} m` : `${activity.type === "chamber-installation" ? "Cameretă nouă" : activity.type === "diagnostics" ? "Punct îndreptare cablu la cald" : activity.type === "splice-repair" ? "Punct refacere sudură" : activity.junction?.documented ? activity.junction.code : "Joncțiune nouă"}${activity.junction?.network ? ` · ${activity.junction.network === "mobile" ? "Orange Mobil" : "Orange Fixed"}` : ""}`}</small></div><b>{activity.photoCount}/{activity.requiredPhotoCount} foto GPS</b><button type="button" className="record-delete-button" onClick={() => void deleteSavedActivity(activity)} disabled={Boolean(deletingActivity)}>{deletingActivity === activity.id ? "Se șterge…" : "Șterge"}</button></article>)}</div>}
     </section>
   </div>;
