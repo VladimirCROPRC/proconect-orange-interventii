@@ -136,9 +136,9 @@ function closingTimestamp(validatedAt: unknown, closingDate: unknown, closingTim
 
 function projectValues(project: ProjectRow) {
   let intervention: {
-    assessment?: { cause?: string; arrivedAt?: number; documentedAt?: number; incidentDescription?: string; damageLocation?: { lat?: number; lon?: number; placedAt?: number } };
+    assessment?: { cause?: string; arrivedAt?: number; documentedAt?: number; incidentDescription?: string; cableCapacity?: number; damageLocation?: { lat?: number; lon?: number; placedAt?: number } };
     execution?: { remediationDescription?: string };
-    documentation?: { validatedAt?: number; validatedBy?: string; completedByTechnicians?: string[]; closingDate?: string; closingTime?: string; incidentDescription?: string; remediationDescription?: string };
+    documentation?: { validatedAt?: number; validatedBy?: string; completedByTechnicians?: string[]; closingDate?: string; closingTime?: string; incidentDescription?: string; remediationDescription?: string; incidentInSla?: string; nicmUpdateRequired?: string };
   } = {};
   try { intervention = project.content_json ? (JSON.parse(project.content_json).intervention ?? {}) : {}; } catch { intervention = {}; }
   const assessment = intervention.assessment;
@@ -162,12 +162,12 @@ function projectValues(project: ProjectRow) {
     arrived: bucharestTimestamp(assessment?.arrivedAt),
     located: bucharestTimestamp(location?.placedAt ?? assessment?.documentedAt),
     completed: closingTimestamp(validated?.validatedAt, validated?.closingDate, validated?.closingTime),
-    capacity: project.cable_capacity,
+    capacity: assessment?.cableCapacity ?? project.cable_capacity,
     cause: validated?.incidentDescription ?? assessment?.incidentDescription ?? project.requirements,
-    incident: "",
+    incident: validated?.incidentInSla ?? "",
     remediation: validated?.remediationDescription ?? intervention.execution?.remediationDescription ?? "",
     coordinates: typeof location?.lat === "number" && typeof location?.lon === "number" ? `${location.lat.toFixed(6)}, ${location.lon.toFixed(6)}` : "",
-    details: "",
+    details: validated?.nicmUpdateRequired ?? "",
   };
 }
 
