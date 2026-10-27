@@ -73,7 +73,7 @@ const activityCatalog: Record<InterventionActivityType, { title: string; short: 
   "chamber-installation": {
     title: "Instalare cameretă",
     short: "Cameretă nouă",
-    description: "Plasează camereta pe hartă și încarcă două fotografii GPS obligatorii.",
+    description: "Plasează camereta nouă pe hartă.",
     badge: "CM",
   },
   diagnostics: {
@@ -814,7 +814,7 @@ export function InterventionExecutionSection({ project, initialSummary, onNotify
                   <p className="intervention-route-distance">Traseu estimat pe hartă: <strong>{Math.round(mappedDistance).toLocaleString("ro-RO")} m</strong></p>
                   <label className="intervention-damage-field"><span>Tip cablu FO <b>OBLIGATORIU</b></span><select value={draft.cableType} onChange={(event) => setDraft((current) => current ? { ...current, cableType: event.target.value } : current)}><option value="">Selectează tipul cablului</option>{[4, 12, 24, 48, 96].map((fibers) => <option key={fibers} value={`Cablu FO ${fibers}F`}>{fibers} fibre</option>)}</select></label>
                   <label className="intervention-damage-field"><span>Lungime instalată <b>METRI</b></span><input type="number" min="0.1" max="1000000" step="0.1" inputMode="decimal" value={draft.cableLength} onChange={(event) => setDraft((current) => current ? { ...current, cableLength: event.target.value } : current)} placeholder="ex. 125" /></label>
-                  {aerialCableInstallation && <div className="fo-photo-rules intervention-photo-thresholds"><span className={cableLengthValid && cableLength <= 100 ? "active" : ""}><b>≤100 m</b><small>3 poze</small></span><span className={cableLength > 100 && cableLength <= 200 ? "active" : ""}><b>101–200 m</b><small>5 poze</small></span><span className={cableLength > 200 ? "active" : ""}><b>&gt;200 m</b><small>minimum 10 poze</small></span></div>}
+                  {!coordinatorMode && aerialCableInstallation && <div className="fo-photo-rules intervention-photo-thresholds"><span className={cableLengthValid && cableLength <= 100 ? "active" : ""}><b>≤100 m</b><small>3 poze</small></span><span className={cableLength > 100 && cableLength <= 200 ? "active" : ""}><b>101–200 m</b><small>5 poze</small></span><span className={cableLength > 200 ? "active" : ""}><b>&gt;200 m</b><small>minimum 10 poze</small></span></div>}
                 </> : junctionPanel("junction", draft.type === "diagnostics" ? "PUNCTUL ÎNDREPTĂRII CABLULUI" : draft.type === "splice-repair" ? "JONCȚIUNEA REFACERII SUDURII" : draft.type === "chamber-installation" ? "CAMERETA NOU INSTALATĂ" : "JONCȚIUNEA NOU INSTALATĂ", draft.junction)}
 
                 {coordinatorMode && draft.type === "junction-installation" && <div className="geo-notice"><span>AI</span><p><strong>Încărcare Joncțiunea {coordinatorJunctionNumber}</strong>Încarcă fotografiile primite pe WhatsApp. OpenAI citește textul și coordonatele, apoi amplasează joncțiunea pe hartă. Salvează activitatea înainte de Joncțiunea următoare.</p></div>}
