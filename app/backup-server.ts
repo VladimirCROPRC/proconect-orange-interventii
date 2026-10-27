@@ -1,6 +1,6 @@
 import * as google from "./google-drive-server";
-import { backupMode, deleteOneDriveFileCopy, queueOneDrive, syncOrangeTicketWorkbook } from "./onedrive-server";
-import { usesGoogle } from "./onedrive-core";
+import { backupMode, deleteOneDriveFileCopy, queueOneDrive, syncOneDriveProject, syncOrangeTicketWorkbook } from "./onedrive-server";
+import { usesGoogle, usesOneDrive } from "./onedrive-core";
 import { getFileRow } from "./project-server";
 
 async function both(kind: "file" | "project", id: string, googleSync: () => Promise<unknown>) {
@@ -34,6 +34,17 @@ export async function syncReportIfConnected(id: string) {
   ]);
   for (const result of outcomes) if (result.status === "rejected") console.error("Drive report refresh requires retry");
 }
+export async function syncFinalizedReportIfConnected(id: string) {
+  const mode = await backupMode();
+  // Closing a ticket must publish the QAF generated from the final saved state,
+  // including validation date, closing date/time and selected services.
+  const outcomes = await Promise.allSettled([
+    usesOneDrive(mode) ? syncOneDriveProject(id, true) : Promise.resolve(),
+    usesGoogle(mode) ? google.syncReportIfConnected(id) : Promise.resolve(),
+  ]);
+  for (const result of outcomes) if (result.status === "rejected") console.error("Final QAF synchronization requires retry");
+}
+
 export async function syncFileIfConnected(id: string) {
   await both("file", id, () => google.syncFileIfConnected(id));
   const file = await getFileRow(id);
