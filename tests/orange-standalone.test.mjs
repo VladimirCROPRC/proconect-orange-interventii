@@ -116,7 +116,7 @@ test("manual closing date and time feed QAF and both centralizers", async () => 
 });
 
 
-test("coordinators can type arrival and finding timestamps without scrolling date pickers", async () => {
+test("coordinators use default calendar dates and typed times for intervention timestamps", async () => {
   const operations = await source("app/intervention-operations.tsx");
   const page = await source("app/page.tsx");
   const helper = await source("app/manual-date-time.ts");
@@ -127,12 +127,14 @@ test("coordinators can type arrival and finding timestamps without scrolling dat
   assert.match(operations, /Ora constatării/);
   assert.match(operations, /documentedAt: manualFindingAt \?\? Date\.now\(\)/);
   assert.match(operations, /placedAt: manualFindingAt \?\?/);
-  assert.match(helper, /formatManualDateInput/);
+  assert.match(helper, /currentBucharestIsoDate/);
   assert.match(helper, /formatManualTimeInput/);
   assert.match(helper, /timeZone: "Europe\/Bucharest"/);
   assert.match(server, /assessment\.documentedAt < assessment\.arrivedAt/);
-  assert.doesNotMatch(operations, /type="date"|type="time"|datetime-local/);
-  assert.doesNotMatch(page, /datetime-local/);
+  assert.match(operations, /type="date"/);
+  assert.match(page, /type="date" name="requestDate" defaultValue=\{currentBucharestIsoDate\(\)\}/);
+  assert.doesNotMatch(operations, /type="time"|datetime-local/);
+  assert.doesNotMatch(page, /type="time"|datetime-local/);
 });
 
 test("field photo requirements are enforced by type", async () => {
