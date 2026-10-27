@@ -28,7 +28,8 @@ function fittOdbCode(body: string) {
 }
 
 export function parseOrangeMail(message: { id?: string; subject?: string; receivedDateTime?: string; body?: { content?: string }; bodyPreview?: string }): OrangeMailPreview | null {
-  const subject = normalizeSubject(String(message.subject ?? ""));
+  const originalSubject = String(message.subject ?? "").trim();
+  const subject = normalizeSubject(originalSubject);
   const body = String(message.body?.content ?? message.bodyPreview ?? "").replace(/\r\n?/g, "\n");
   const ticket = /\b(FITT|IMO)\d{5,}\b/i.exec(`${subject}\n${body}`);
   if (!ticket) return null;
@@ -56,7 +57,7 @@ export function parseOrangeMail(message: { id?: string; subject?: string; receiv
     messageId: String(message.id ?? ""), ticketId, flow, subject,
     receivedAt: String(message.receivedDateTime ?? ""),
     siteA: endpoints?.[1]?.toUpperCase() ?? "", siteB: endpoints?.[2]?.toUpperCase() ?? "",
-    foSection: section, locality: "", county: "", severity: "", etr: "",
+    foSection: originalSubject || subject, locality: "", county: "", severity: "", etr: "",
     incidentDescription: subject.replace(/\s*\/{2,}\s*IMO\d+.*$/i, "").trim(),
   };
 }
