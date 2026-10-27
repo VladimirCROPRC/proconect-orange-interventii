@@ -5,7 +5,7 @@ import { deleteProjectFile, fetchProjectFiles, formatCapturedAt, uploadProjectFi
 import { InterventionExecutionSection } from "./intervention-execution";
 import { DamageLocationPicker } from "./damage-location-picker";
 import { analysisCapturedAt, analysisCoordinates, analyzeCoordinatorPhoto } from "./photo-analysis-client";
-import { formatManualDateInput, formatManualTimeInput, isoDateToRomanian, romanianDateToIso, romanianDateTimeToTimestamp, timestampToRomanianDateTime, validManualTime } from "./manual-date-time";
+import { currentBucharestIsoDate, formatManualTimeInput, romanianDateToIso, romanianDateTimeToTimestamp, timestampToRomanianDateTime, validManualTime } from "./manual-date-time";
 import { OroSiteMapLink } from "./oro-lookup";
 import { orangeMaterials, proconectMaterials } from "./orange-materials";
 import { orangeServicePackages } from "./orange-services";
@@ -157,9 +157,9 @@ export function InterventionOperationsSection({
   const [damageType, setDamageType] = useState<InterventionDamageType | "">(initialSummary?.assessment?.damageType ?? "");
   const [cause, setCause] = useState<InterventionCause | "">(initialSummary?.assessment?.cause ?? "");
   const [arrivedAt, setArrivedAt] = useState(initialSummary?.assessment?.arrivedAt);
-  const [arrivalDateInput, setArrivalDateInput] = useState(initialArrivalInput.date);
+  const [arrivalDateInput, setArrivalDateInput] = useState(romanianDateToIso(initialArrivalInput.date) || (canEdit ? currentBucharestIsoDate() : ""));
   const [arrivalTimeInput, setArrivalTimeInput] = useState(initialArrivalInput.time);
-  const [findingDateInput, setFindingDateInput] = useState(initialFindingInput.date);
+  const [findingDateInput, setFindingDateInput] = useState(romanianDateToIso(initialFindingInput.date) || (canEdit ? currentBucharestIsoDate() : ""));
   const [findingTimeInput, setFindingTimeInput] = useState(initialFindingInput.time);
   const [incidentDescription, setIncidentDescription] = useState(initialSummary?.assessment?.incidentDescription ?? "");
   const [damageLocation, setDamageLocation] = useState(initialSummary?.assessment?.damageLocation);
@@ -187,7 +187,7 @@ export function InterventionOperationsSection({
   const [reviewServices, setReviewServices] = useState(initialSummary?.documentation?.services ?? []);
   const [serviceCode, setServiceCode] = useState("");
   const [serviceQuantity, setServiceQuantity] = useState("1");
-  const [closingDateInput, setClosingDateInput] = useState(isoDateToRomanian(initialSummary?.documentation?.closingDate));
+  const [closingDateInput, setClosingDateInput] = useState(initialSummary?.documentation?.closingDate ?? (canEdit ? currentBucharestIsoDate() : ""));
   const [closingTime, setClosingTime] = useState(initialSummary?.documentation?.closingTime ?? "");
 
   useEffect(() => {
@@ -199,9 +199,9 @@ export function InterventionOperationsSection({
       setArrivedAt(initialSummary?.assessment?.arrivedAt);
       const arrival = timestampToRomanianDateTime(initialSummary?.assessment?.arrivedAt);
       const finding = timestampToRomanianDateTime(initialSummary?.assessment?.damageLocation?.placedAt ?? initialSummary?.assessment?.documentedAt);
-      setArrivalDateInput(arrival.date);
+      setArrivalDateInput(romanianDateToIso(arrival.date) || (canEdit ? currentBucharestIsoDate() : ""));
       setArrivalTimeInput(arrival.time);
-      setFindingDateInput(finding.date);
+      setFindingDateInput(romanianDateToIso(finding.date) || (canEdit ? currentBucharestIsoDate() : ""));
       setFindingTimeInput(finding.time);
       setIncidentDescription(initialSummary?.assessment?.incidentDescription ?? "");
       setDamageLocation(initialSummary?.assessment?.damageLocation);
@@ -260,7 +260,7 @@ export function InterventionOperationsSection({
       if (mounted) setSelectedWarehouseId(initialSummary?.documentation?.warehouseId ?? "");
       if (mounted) setReviewServices(initialSummary?.documentation?.services ?? []);
       if (mounted) setCompletedByTechnicians(initialSummary?.documentation?.completedByTechnicians ?? []);
-      if (mounted) setClosingDateInput(isoDateToRomanian(initialSummary?.documentation?.closingDate));
+      if (mounted) setClosingDateInput(initialSummary?.documentation?.closingDate ?? (canEdit ? currentBucharestIsoDate() : ""));
       if (mounted) setClosingTime(initialSummary?.documentation?.closingTime ?? "");
     });
     return () => {
@@ -539,9 +539,9 @@ export function InterventionOperationsSection({
             <div className="intervention-assessment-content">
               <div style={{ order: -3 }}>
                 {canEdit ? <div className="intervention-material-source-lists">
-                  <label className="intervention-damage-field"><span>Data ajungerii *</span><input type="text" inputMode="numeric" placeholder="ZZ.LL.AAAA" pattern={"\\d{2}\\.\\d{2}\\.\\d{4}"} maxLength={10} value={arrivalDateInput} onChange={(event) => setArrivalDateInput(formatManualDateInput(event.target.value))} required /></label>
+                  <label className="intervention-damage-field"><span>Data ajungerii *</span><input type="date" value={arrivalDateInput} onChange={(event) => setArrivalDateInput(event.target.value)} required /></label>
                   <label className="intervention-damage-field"><span>Ora ajungerii *</span><input type="text" inputMode="numeric" placeholder="HH:MM" pattern={"(?:[01]\\d|2[0-3]):[0-5]\\d"} maxLength={5} value={arrivalTimeInput} onChange={(event) => setArrivalTimeInput(formatManualTimeInput(event.target.value))} required /></label>
-                  <label className="intervention-damage-field"><span>Data constatării *</span><input type="text" inputMode="numeric" placeholder="ZZ.LL.AAAA" pattern={"\\d{2}\\.\\d{2}\\.\\d{4}"} maxLength={10} value={findingDateInput} onChange={(event) => setFindingDateInput(formatManualDateInput(event.target.value))} required /></label>
+                  <label className="intervention-damage-field"><span>Data constatării *</span><input type="date" value={findingDateInput} onChange={(event) => setFindingDateInput(event.target.value)} required /></label>
                   <label className="intervention-damage-field"><span>Ora constatării *</span><input type="text" inputMode="numeric" placeholder="HH:MM" pattern={"(?:[01]\\d|2[0-3]):[0-5]\\d"} maxLength={5} value={findingTimeInput} onChange={(event) => setFindingTimeInput(formatManualTimeInput(event.target.value))} required /></label>
                 </div> : <button className="primary-button" type="button" disabled={Boolean(arrivedAt)} onClick={() => {
                   const timestamp = Date.now();
@@ -732,7 +732,7 @@ export function InterventionOperationsSection({
               <label className="intervention-damage-field"><span>Descriere incident validată</span><textarea rows={5} maxLength={2000} value={reviewIncident} onChange={(event) => setReviewIncident(event.target.value)} /></label>
               <label className="intervention-damage-field"><span>Descriere remediere validată</span><textarea rows={5} maxLength={2000} value={reviewRemediation} onChange={(event) => setReviewRemediation(event.target.value)} /></label>
               <div className="intervention-material-source-lists">
-                <label className="intervention-damage-field"><span>Data închiderii *</span><input type="text" inputMode="numeric" placeholder="ZZ.LL.AAAA" pattern={"\\d{2}\\.\\d{2}\\.\\d{4}"} maxLength={10} required value={closingDateInput} readOnly={project.status === "Finalizat"} onChange={(event) => setClosingDateInput(formatManualDateInput(event.target.value))} /></label>
+                <label className="intervention-damage-field"><span>Data închiderii *</span><input type="date" required value={closingDateInput} readOnly={project.status === "Finalizat"} onChange={(event) => setClosingDateInput(event.target.value)} /></label>
                 <label className="intervention-damage-field"><span>Ora de închidere *</span><input type="text" inputMode="numeric" placeholder="HH:MM" pattern={"(?:[01]\\d|2[0-3]):[0-5]\\d"} maxLength={5} required value={closingTime} readOnly={project.status === "Finalizat"} onChange={(event) => setClosingTime(formatManualTimeInput(event.target.value))} /></label>
               </div>
               <small>Data și ora sunt introduse manual de coordonator și se transmit în QAF și Centralizator.</small>
