@@ -27,6 +27,11 @@ function fittOdbCode(body: string) {
   return (/\bODB\s*:\s*([A-Z0-9][A-Z0-9_-]*)/i.exec(body)?.[1] ?? "").toUpperCase();
 }
 
+function fittSiteCode(value: string) {
+  const normalized = value.trim().toUpperCase();
+  return normalized.replace(/^(?:OLT\d*|EDFA[^-]*)-+/i, "");
+}
+
 export function parseOrangeMail(message: { id?: string; subject?: string; receivedDateTime?: string; body?: { content?: string }; bodyPreview?: string }): OrangeMailPreview | null {
   const originalSubject = String(message.subject ?? "").trim();
   const subject = normalizeSubject(originalSubject);
@@ -43,7 +48,7 @@ export function parseOrangeMail(message: { id?: string; subject?: string; receiv
     return {
       messageId: String(message.id ?? ""), ticketId, flow, subject,
       receivedAt: String(message.receivedDateTime ?? ""),
-      siteA: oltEdfaName, siteB: "",
+      siteA: fittSiteCode(oltEdfaName), siteB: "",
       foSection: odbCode || oltEdfaName, locality,
       county: "",
       severity: field(body, "Severity"), etr: field(body, "ETR"),
