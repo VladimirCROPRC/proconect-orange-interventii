@@ -444,7 +444,7 @@ export function InterventionOperationsSection({
         setDocumentationPhotos((current) => [...current, saved]);
         uploaded += 1;
       }
-      onNotify(`${uploaded} ${uploaded === 1 ? "fotografie a fost încărcată" : "fotografii au fost încărcate"} și adăugată în coada OneDrive a tichetului.`);
+      onNotify(`${uploaded} ${uploaded === 1 ? "fotografie a fost încărcată și adăugată" : "fotografii au fost încărcate și adăugate"} în coada OneDrive a tichetului.`);
     } catch (failure) {
       setError(`${uploaded ? `${uploaded} fotografii încărcate. ` : ""}${failure instanceof Error ? failure.message : "Fotografiile nu au putut fi încărcate."}`);
     } finally {
