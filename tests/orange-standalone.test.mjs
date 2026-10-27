@@ -365,6 +365,24 @@ test("management can save assessment and execution without mandatory photos", as
 });
 
 
+test("coordinators can bulk upload documentation photos to the Orange OneDrive ticket folder", async () => {
+  const operations = await source("app/intervention-operations.tsx");
+  const storage = await source("app/client-storage.ts");
+  const filesRoute = await source("app/api/files/route.ts");
+  const server = await source("app/project-server.ts");
+  const oneDrive = await source("app/onedrive-server.ts");
+  assert.match(operations, /Încarcă bulk toate fotografiile/);
+  assert.match(operations, /section: "intervention-documentation"/);
+  assert.match(operations, /category: "bulk-photo"/);
+  assert.match(storage, /resizedPhotoSections = new Set\(\["intervention-documentation"\]\)/);
+  assert.match(storage, /maximumWidth = isLandscape \? 1024 : 768/);
+  assert.match(filesRoute, /section === "intervention-documentation"/);
+  assert.match(filesRoute, /category !== "bulk-photo"/);
+  assert.match(server, /"intervention-documentation"/);
+  assert.match(oneDrive, /activity === "Intervenție Orange"/);
+  assert.match(oneDrive, /folder\(token, destination\.id, shortOrangeTicket\(projectId\)\)/);
+});
+
 test("Orange tickets can continue to documentation without execution activities", async () => {
   const execution = await source("app/intervention-execution.tsx");
   const operations = await source("app/intervention-operations.tsx");
