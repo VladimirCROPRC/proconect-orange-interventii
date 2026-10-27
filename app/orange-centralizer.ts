@@ -180,8 +180,9 @@ function renderRow(project: ProjectRow, row: number) {
     textCell(`I${row}`, value.status, "18") + textCell(`J${row}`, value.sla) + textCell(`K${row}`, "", "20") +
     textCell(`L${row}`, value.created, "18") + textCell(`M${row}`, value.technician) + textCell(`N${row}`, value.completedBy, "18") +
     textCell(`O${row}`, value.arrived, "3") + textCell(`P${row}`, value.located, "22") + textCell(`Q${row}`, value.completed) +
-    numberCell(`R${row}`, value.capacity) + textCell(`S${row}`, value.cause) + textCell(`U${row}`, value.incident, "21") +
-    textCell(`V${row}`, value.remediation) + textCell(`W${row}`, value.coordinates) + textCell(`X${row}`, value.details) + `</row>`;
+    numberCell(`R${row}`, value.capacity) + textCell(`S${row}`, value.cause) +
+    textCell(`V${row}`, value.remediation) + textCell(`W${row}`, value.coordinates) +
+    textCell(`Y${row}`, value.incident, "21") + textCell(`Z${row}`, value.details) + `</row>`;
 }
 
 export async function buildOrangeCentralizerXlsx() {
