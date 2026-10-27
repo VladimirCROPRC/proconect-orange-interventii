@@ -4,6 +4,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { deleteProjectFile, fetchProjectFiles, formatCapturedAt, uploadProjectFile, type StoredProjectFile } from "./client-storage";
 import { InterventionExecutionSection } from "./intervention-execution";
 import { DamageLocationPicker } from "./damage-location-picker";
+import { analysisCapturedAt, analysisCoordinates, analyzeCoordinatorPhoto } from "./photo-analysis-client";
 import { OroSiteMapLink } from "./oro-lookup";
 import { orangeMaterials, proconectMaterials } from "./orange-materials";
 import { orangeServicePackages } from "./orange-services";
@@ -284,22 +285,45 @@ export function InterventionOperationsSection({
     setUploading(true);
     setError("");
     try {
-      const geo = await currentPhotoLocation();
+      const fieldGeo = canEdit ? "" : await currentPhotoLocation();
       for (const file of selectedFiles) {
+        let geo = fieldGeo;
+        let capturedAt = Date.now();
+        if (canEdit) {
+          const analysis = await analyzeCoordinatorPhoto({ projectId: project.id, file, context: "assessment" });
+          const coordinates = analysisCoordinates(analysis);
+          geo = coordinates.geo;
+          capturedAt = analysisCapturedAt(analysis);
+          if (category === "damage") {
+            setDamageLocation((current) => current ?? { lat: coordinates.lat, lon: coordinates.lon, placedAt: capturedAt });
+            setArrivedAt((current) => current ?? capturedAt);
+            setIncidentDescription((current) => current.trim() ? current : analysis.incidentDescription || analysis.summary);
+            setDamageType((current) => current || analysis.damageType);
+            setCause((current) => current || analysis.cause);
+            setRouteType((current) => current || analysis.routeType);
+            setCableCapacity((current) => current || (analysis.cableCapacity ? String(Math.round(analysis.cableCapacity)) : ""));
+          } else {
+            setSiteMeasurementCode((current) => current || analysis.siteCode);
+            setSiteMeasurementLength((current) => current || (analysis.otdrLengthMeters ? String(analysis.otdrLengthMeters) : ""));
+          }
+        }
         const saved = await uploadProjectFile({
           projectId: project.id,
           section: "intervention-assessment",
           category,
           file,
           geo,
+          capturedAt,
         });
         setPhotos((current) => [...current, saved]);
       }
-      onNotify(category === "site-measurement"
-        ? "Fotografia măsurătorii OTDR a fost salvată cu poziția GPS."
-        : selectedFiles.length === 1
-          ? "Fotografia avariei a fost salvată cu poziția GPS."
-          : `${selectedFiles.length} fotografii ale avariei au fost salvate cu poziția GPS.`);
+      onNotify(canEdit
+        ? "OpenAI a interpretat fotografia, a completat datele disponibile și a poziționat punctul pe hartă. Verifică valorile înainte de salvare."
+        : category === "site-measurement"
+          ? "Fotografia măsurătorii OTDR a fost salvată cu poziția GPS."
+          : selectedFiles.length === 1
+            ? "Fotografia avariei a fost salvată cu poziția GPS."
+            : `${selectedFiles.length} fotografii ale avariei au fost salvate cu poziția GPS.`);
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : "Fotografiile intervenției nu au putut fi încărcate.");
     } finally {
@@ -555,7 +579,7 @@ export function InterventionOperationsSection({
                 <input
                   type="file"
                   accept="image/*"
-                  capture="environment"
+                  capture={canEdit ? undefined : "environment"}
                   multiple
                   disabled={uploading}
                   onChange={(event) => {
@@ -565,8 +589,8 @@ export function InterventionOperationsSection({
                   }}
                 />
                 <span className="intervention-upload-icon">⌖</span>
-                <strong>{uploading ? "Se identifică poziția și se încarcă..." : "Adaugă fotografii cu GPS"}</strong>
-                <small>Accesul la locația dispozitivului este obligatoriu.</small>
+                <strong>{uploading ? (canEdit ? "OpenAI citește fotografia și identifică poziția..." : "Se identifică poziția și se încarcă...") : canEdit ? "Încarcă fotografii primite pe WhatsApp" : "Adaugă fotografii cu GPS"}</strong>
+                <small>{canEdit ? "Textul, data, coordonatele și informațiile tehnice sunt propuse automat; verifică-le înainte de salvare." : "Accesul la locația dispozitivului este obligatoriu."}</small>
               </label>
 
               {loadingPhotos && <p className="intervention-loading">Se verifică fotografiile salvate...</p>}
@@ -604,14 +628,14 @@ export function InterventionOperationsSection({
                   <span>{validSiteMeasurementPhotos.length} {validSiteMeasurementPhotos.length === 1 ? "poză GPS" : "poze GPS"}</span>
                 </div>
                 <label className={`intervention-photo-upload${uploading ? " is-uploading" : ""}`}>
-                  <input type="file" accept="image/*" capture="environment" disabled={uploading} onChange={(event) => {
+                  <input type="file" accept="image/*" capture={canEdit ? undefined : "environment"} disabled={uploading} onChange={(event) => {
                     const selectedFiles = Array.from(event.target.files ?? []);
                     event.currentTarget.value = "";
                     void addPhotos(selectedFiles, "site-measurement");
                   }} />
                   <span className="intervention-upload-icon">⌖</span>
-                  <strong>{uploading ? "Se încarcă..." : "Adaugă fotografia OTDR"}</strong>
-                  <small>Este necesară cel puțin o fotografie cu GPS valid.</small>
+                  <strong>{uploading ? (canEdit ? "OpenAI citește fotografia..." : "Se încarcă...") : canEdit ? "Încarcă fotografia OTDR din WhatsApp" : "Adaugă fotografia OTDR"}</strong>
+                  <small>{canEdit ? "Coordonatele, codul site-ului și lungimea vizibilă sunt propuse automat." : "Este necesară cel puțin o fotografie cu GPS valid."}</small>
                 </label>
                 {siteMeasurementPhotos.length > 0 && <div className="intervention-photo-grid">
                   {siteMeasurementPhotos.map((photo) => <article className="intervention-photo-item" key={photo.id}>
@@ -648,7 +672,7 @@ export function InterventionOperationsSection({
           </aside>
         </form>
       ) : section === "execution" ? (
-        <InterventionExecutionSection project={project} initialSummary={initialSummary} onNotify={onNotify} onSaved={onSaved} blankMap={orangeIntervention} />
+        <InterventionExecutionSection project={project} initialSummary={initialSummary} onNotify={onNotify} onSaved={onSaved} blankMap={orangeIntervention} coordinatorMode={canEdit} />
       ) : canEdit ? (
         <div className="intervention-documentation-layout">
           <section className="project-card intervention-report-card">
