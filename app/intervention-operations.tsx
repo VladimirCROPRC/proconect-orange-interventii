@@ -189,6 +189,9 @@ export function InterventionOperationsSection({
   const [serviceQuantity, setServiceQuantity] = useState("1");
   const [closingDateInput, setClosingDateInput] = useState(initialSummary?.documentation?.closingDate ?? (canEdit ? currentBucharestIsoDate() : ""));
   const [closingTime, setClosingTime] = useState(initialSummary?.documentation?.closingTime ?? "");
+  const [documentationPhotos, setDocumentationPhotos] = useState<StoredProjectFile[]>([]);
+  const [loadingDocumentationPhotos, setLoadingDocumentationPhotos] = useState(false);
+  const [uploadingDocumentationPhotos, setUploadingDocumentationPhotos] = useState(false);
   const [incidentInSla, setIncidentInSla] = useState<InterventionCentralizerChoice | "">(initialSummary?.documentation?.incidentInSla ?? "");
   const [nicmUpdateRequired, setNicmUpdateRequired] = useState<InterventionCentralizerChoice | "">(initialSummary?.documentation?.nicmUpdateRequired ?? "");
 
@@ -232,6 +235,17 @@ export function InterventionOperationsSection({
       mounted = false;
     };
   }, [project.id, initialSummary?.assessment?.damageType, initialSummary?.assessment?.cause, initialSummary?.assessment?.damageLocation]);
+
+  useEffect(() => {
+    if (!canEdit || section !== "documentation") return;
+    let mounted = true;
+    setLoadingDocumentationPhotos(true);
+    fetchProjectFiles(project.id, "intervention-documentation")
+      .then((stored) => { if (mounted) setDocumentationPhotos(stored); })
+      .catch((failure) => { if (mounted) setError(failure instanceof Error ? failure.message : "Fotografiile din Documentare nu sunt disponibile."); })
+      .finally(() => { if (mounted) setLoadingDocumentationPhotos(false); });
+    return () => { mounted = false; };
+  }, [canEdit, section, project.id]);
 
   useEffect(() => {
     if (!canEdit || section !== "documentation") return;
@@ -410,6 +424,45 @@ export function InterventionOperationsSection({
       setError(failure instanceof Error ? failure.message : "Constatarea intervenției nu a putut fi salvată.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function addDocumentationPhotos(selectedFiles: File[]) {
+    if (!selectedFiles.length) return;
+    setUploadingDocumentationPhotos(true);
+    setError("");
+    let uploaded = 0;
+    try {
+      for (const file of selectedFiles) {
+        const saved = await uploadProjectFile({
+          projectId: project.id,
+          section: "intervention-documentation",
+          category: "bulk-photo",
+          file,
+          capturedAt: file.lastModified || Date.now(),
+        });
+        setDocumentationPhotos((current) => [...current, saved]);
+        uploaded += 1;
+      }
+      onNotify(`${uploaded} ${uploaded === 1 ? "fotografie a fost încărcată" : "fotografii au fost încărcate"} și adăugată în coada OneDrive a tichetului.`);
+    } catch (failure) {
+      setError(`${uploaded ? `${uploaded} fotografii încărcate. ` : ""}${failure instanceof Error ? failure.message : "Fotografiile nu au putut fi încărcate."}`);
+    } finally {
+      setUploadingDocumentationPhotos(false);
+    }
+  }
+
+  async function removeDocumentationPhoto(photo: StoredProjectFile) {
+    setRemovingId(photo.id);
+    setError("");
+    try {
+      await deleteProjectFile(photo.id);
+      setDocumentationPhotos((current) => current.filter((item) => item.id !== photo.id));
+      onNotify("Fotografia a fost ștearsă din aplicație și din destinațiile sincronizate.");
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : "Fotografia nu a putut fi ștearsă.");
+    } finally {
+      setRemovingId("");
     }
   }
 
@@ -719,6 +772,32 @@ export function InterventionOperationsSection({
                 <article><small>CABLU FO</small><strong>{totalCableMeters.toLocaleString("ro-RO")} m</strong></article>
               </div>
 
+              <div className="card-heading"><div><h2>Fotografii intervenție</h2><p>Selectează simultan toate fotografiile primite. Acestea sunt comprimate și sincronizate în folderul OneDrive al tichetului.</p></div></div>
+              <label className={`intervention-photo-upload${uploadingDocumentationPhotos ? " is-uploading" : ""}`}>
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  disabled={uploadingDocumentationPhotos}
+                  onChange={(event) => {
+                    const selectedFiles = Array.from(event.target.files ?? []);
+                    event.currentTarget.value = "";
+                    void addDocumentationPhotos(selectedFiles);
+                  }}
+                />
+                <span className="intervention-upload-icon">＋</span>
+                <strong>{uploadingDocumentationPhotos ? "Se încarcă fotografiile..." : "Încarcă bulk toate fotografiile"}</strong>
+                <small>Poți selecta mai multe imagini dintr-o singură operațiune.</small>
+              </label>
+              {loadingDocumentationPhotos && <p className="intervention-loading">Se verifică fotografiile încărcate...</p>}
+              {documentationPhotos.length > 0 && <div className="intervention-photo-grid">
+                {documentationPhotos.map((photo) => <article className="intervention-photo-item" key={photo.id}>
+                  <a href={photo.url} target="_blank" rel="noreferrer"><img src={photo.url} alt={photo.name} loading="lazy" /></a>
+                  <div><strong>{photo.name}</strong><small>{formatCapturedAt(photo.capturedAt)}</small></div>
+                  <button type="button" onClick={() => void removeDocumentationPhoto(photo)} disabled={removingId === photo.id}>{removingId === photo.id ? "..." : "×"}</button>
+                </article>)}
+              </div>}
+
               <div className="intervention-report-heading">
                 <div><strong>Conținut raport</strong><small>Poți ajusta textul înainte de validare.</small></div>
                 {project.status !== "Finalizat" && <button type="button" onClick={() => setReport(buildInterventionReport(project, initialSummary))}>Regenerează</button>}
@@ -811,7 +890,7 @@ export function InterventionOperationsSection({
             <div className="summary-title"><span>✓</span><div><h2>Validare și închidere</h2><p>{project.id} · Acces administrativ</p></div></div>
             <div className="summary-checklist">
               <div className={initialSummary?.assessment ? "done" : ""}><span>{initialSummary?.assessment ? "✓" : "○"}</span><p><strong>Constatare completată</strong><small>{initialSummary?.assessment?.damageType ?? "Tipul avariei și fotografiile lipsesc"}</small></p></div>
-              <div className={executionActivities.length ? "done" : ""}><span>{executionActivities.length ? "✓" : "○"}</span><p><strong>Execuție documentată</strong><small>{executionActivities.length ? `${executionActivities.length} ${executionActivities.length === 1 ? "activitate salvată" : "activități salvate"}` : "Minimum o activitate obligatorie"}</small></p></div>
+              <div className="done"><span>✓</span><p><strong>Execuție</strong><small>{executionActivities.length ? `${executionActivities.length} ${executionActivities.length === 1 ? "activitate salvată" : "activități salvate"}` : "Fără activități selectate"}</small></p></div>
               <div className={reportReady ? "done" : ""}><span>{reportReady ? "✓" : "○"}</span><p><strong>Raport pregătit</strong><small>{reportReady ? "Raportul intervenției este complet" : "Raportul trebuie să aibă cel puțin 20 de caractere"}</small></p></div>
               <div className={closingDateReady && closingTimeReady ? "done" : ""}><span>{closingDateReady && closingTimeReady ? "✓" : "○"}</span><p><strong>Data și ora închiderii</strong><small>{closingDateReady && closingTimeReady ? `${closingDate} · ${closingTime}` : "Data și ora sunt obligatorii"}</small></p></div>
             </div>
