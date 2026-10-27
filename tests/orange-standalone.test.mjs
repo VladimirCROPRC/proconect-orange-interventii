@@ -115,6 +115,26 @@ test("manual closing date and time feed QAF and both centralizers", async () => 
   assert.match(oneDrive, /orangeClosingTimestamp\(documentation\?\.validatedAt, documentation\?\.closingDate, documentation\?\.closingTime\)/);
 });
 
+
+test("coordinators can type arrival and finding timestamps without scrolling date pickers", async () => {
+  const operations = await source("app/intervention-operations.tsx");
+  const page = await source("app/page.tsx");
+  const helper = await source("app/manual-date-time.ts");
+  const server = await source("app/project-server.ts");
+  assert.match(operations, /Data ajungerii/);
+  assert.match(operations, /Ora ajungerii/);
+  assert.match(operations, /Data constatării/);
+  assert.match(operations, /Ora constatării/);
+  assert.match(operations, /documentedAt: manualFindingAt \?\? Date\.now\(\)/);
+  assert.match(operations, /placedAt: manualFindingAt \?\?/);
+  assert.match(helper, /formatManualDateInput/);
+  assert.match(helper, /formatManualTimeInput/);
+  assert.match(helper, /timeZone: "Europe\/Bucharest"/);
+  assert.match(server, /assessment\.documentedAt < assessment\.arrivedAt/);
+  assert.doesNotMatch(operations, /type="date"|type="time"|datetime-local/);
+  assert.doesNotMatch(page, /datetime-local/);
+});
+
 test("field photo requirements are enforced by type", async () => {
   const operations = await source("app/intervention-operations.tsx");
   const execution = await source("app/intervention-execution.tsx");
@@ -147,8 +167,10 @@ test("Orange ticket creation only requires the ticket number and uses the manual
   const oneDrive = await source("app/onedrive-server.ts");
   const backup = await source("app/backup-server.ts");
   assert.match(page, /Număr tichet \*<\/span><input name="requestId" required/);
-  assert.match(page, /Data și ora solicitării intervenției<\/span><input type="datetime-local" name="requestDate"/);
-  assert.match(page, /date: isOrangeForm \? String\(form\.get\("requestDate"\)/);
+  assert.match(page, /Data solicitării intervenției/);
+  assert.match(page, /Ora solicitării intervenției/);
+  assert.match(page, /combineRomanianDateTime\(String\(form\.get\("requestDate"\)/);
+  assert.doesNotMatch(page, /datetime-local/);
   assert.match(page, /required=\{!isOrangeForm\}/);
   assert.doesNotMatch(server, /Completează toate informațiile obligatorii ale proiectului/);
   assert.match(server, /normalizeRequestDateTime\(input\.date\)/);
