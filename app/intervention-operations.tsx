@@ -9,7 +9,7 @@ import { currentBucharestIsoDate, formatManualTimeInput, romanianDateToIso, roma
 import { OroSiteMapLink } from "./oro-lookup";
 import { orangeMaterials, proconectMaterials } from "./orange-materials";
 import { orangeServicePackages } from "./orange-services";
-import type { InterventionCause, InterventionDamageType, InterventionExecutionActivity, InterventionFieldSummary, InterventionMaterialSelection } from "./field-documentation";
+import type { InterventionCause, InterventionCentralizerChoice, InterventionDamageType, InterventionExecutionActivity, InterventionFieldSummary, InterventionMaterialSelection } from "./field-documentation";
 import type { ProjectRecord } from "./project-data";
 
 type InterventionSection = "assessment" | "execution" | "documentation";
@@ -189,6 +189,8 @@ export function InterventionOperationsSection({
   const [serviceQuantity, setServiceQuantity] = useState("1");
   const [closingDateInput, setClosingDateInput] = useState(initialSummary?.documentation?.closingDate ?? (canEdit ? currentBucharestIsoDate() : ""));
   const [closingTime, setClosingTime] = useState(initialSummary?.documentation?.closingTime ?? "");
+  const [incidentInSla, setIncidentInSla] = useState<InterventionCentralizerChoice | "">(initialSummary?.documentation?.incidentInSla ?? "");
+  const [nicmUpdateRequired, setNicmUpdateRequired] = useState<InterventionCentralizerChoice | "">(initialSummary?.documentation?.nicmUpdateRequired ?? "");
 
   useEffect(() => {
     let mounted = true;
@@ -262,6 +264,8 @@ export function InterventionOperationsSection({
       if (mounted) setCompletedByTechnicians(initialSummary?.documentation?.completedByTechnicians ?? []);
       if (mounted) setClosingDateInput(initialSummary?.documentation?.closingDate ?? (canEdit ? currentBucharestIsoDate() : ""));
       if (mounted) setClosingTime(initialSummary?.documentation?.closingTime ?? "");
+      if (mounted) setIncidentInSla(initialSummary?.documentation?.incidentInSla ?? "");
+      if (mounted) setNicmUpdateRequired(initialSummary?.documentation?.nicmUpdateRequired ?? "");
     });
     return () => {
       mounted = false;
@@ -293,7 +297,7 @@ export function InterventionOperationsSection({
   const closingDate = romanianDateToIso(closingDateInput);
   const closingDateReady = /^\d{4}-\d{2}-\d{2}$/.test(closingDate);
   const closingTimeReady = validManualTime(closingTime);
-  const canFinalize = Boolean(canEdit && initialSummary?.assessment && executionActivities.length && reportReady && closingDateReady && closingTimeReady && project.status !== "Finalizat");
+  const canFinalize = Boolean(canEdit && initialSummary?.assessment && executionActivities.length && reportReady && closingDateReady && closingTimeReady && incidentInSla && nicmUpdateRequired && project.status !== "Finalizat");
 
   async function addPhotos(selectedFiles: File[], category: "damage" | "site-measurement" = "damage") {
     if (!selectedFiles.length) return;
@@ -432,6 +436,8 @@ export function InterventionOperationsSection({
           remediationDescription: reviewRemediation.trim(),
           closingDate,
           closingTime,
+          incidentInSla: incidentInSla as InterventionCentralizerChoice,
+          nicmUpdateRequired: nicmUpdateRequired as InterventionCentralizerChoice,
           completedByTechnicians,
           services: reviewServices,
           ...(selectedWarehouseId ? { warehouseId: selectedWarehouseId } : {}),
@@ -736,6 +742,22 @@ export function InterventionOperationsSection({
                 <label className="intervention-damage-field"><span>Ora de închidere *</span><input type="text" inputMode="numeric" placeholder="HH:MM" pattern={"(?:[01]\\d|2[0-3]):[0-5]\\d"} maxLength={5} required value={closingTime} readOnly={project.status === "Finalizat"} onChange={(event) => setClosingTime(formatManualTimeInput(event.target.value))} /></label>
               </div>
               <small>Data și ora sunt introduse manual de coordonator și se transmit în QAF și Centralizator.</small>
+              <div className="intervention-material-source-lists">
+                <label className="intervention-damage-field">
+                  <span>Incident în SLA *</span>
+                  <select value={incidentInSla} onChange={(event) => setIncidentInSla(event.target.value as InterventionCentralizerChoice | "")} required disabled={project.status === "Finalizat"}>
+                    <option value="">Selectează</option><option value="Y">Y</option><option value="N">N</option><option value="N/A">N/A</option>
+                  </select>
+                  <small>Se sincronizează în coloana „Incident in SLA”.</small>
+                </label>
+                <label className="intervention-damage-field">
+                  <span>Necesită actualizare în NICM *</span>
+                  <select value={nicmUpdateRequired} onChange={(event) => setNicmUpdateRequired(event.target.value as InterventionCentralizerChoice | "")} required disabled={project.status === "Finalizat"}>
+                    <option value="">Selectează</option><option value="Y">Y</option><option value="N">N</option><option value="N/A">N/A</option>
+                  </select>
+                  <small>Se sincronizează în coloana „Necesar update in NICM”.</small>
+                </label>
+              </div>
 
               <div className="card-heading"><div><h2>Tehnicieni care au finalizat intervenția</h2><p>Selecția este opțională. Fără selecție, Centralizatorul va folosi echipa alocată inițial.</p></div></div>
               <div className="switch-row">{availableTechnicians.map((technician) => <label className="switch-card" key={technician.username}><span><b>{technician.name}</b><small>@{technician.username}</small></span><input type="checkbox" checked={completedByTechnicians.includes(technician.name)} onChange={(event) => setCompletedByTechnicians((current) => event.target.checked ? [...current, technician.name] : current.filter((name) => name !== technician.name))} /><i /></label>)}</div>
