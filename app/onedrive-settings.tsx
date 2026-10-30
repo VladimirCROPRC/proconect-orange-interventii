@@ -9,6 +9,9 @@ export function OneDriveSettings() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [mailPreview, setMailPreview] = useState<MailPreview | null>(null);
+  const [qafFolderUrl, setQafFolderUrl] = useState("");
+  const [qafScanning, setQafScanning] = useState(false);
+  const [qafMessage, setQafMessage] = useState("");
   useEffect(() => {
     let mounted = true;
     fetch("/api/onedrive", { cache: "no-store" }).then(async response => {
@@ -49,6 +52,29 @@ export function OneDriveSettings() {
     } catch (e) { setError(e instanceof Error ? e.message : "Importul automat a eșuat."); }
     finally { setBusy(false); }
   }
+  async function scanQafFolder() {
+    if (!qafFolderUrl.trim()) { setError("Lipește linkul folderului OneDrive sau SharePoint."); return; }
+    setQafScanning(true); setError(""); setQafMessage("");
+    try {
+      const response = await fetch("/api/onedrive/qaf-scan", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ folderUrl: qafFolderUrl.trim() }),
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({})) as { error?: string };
+        throw new Error(data.error || "Scanarea QAF nu a putut fi finalizată.");
+      }
+      const blob = await response.blob();
+      const downloadUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = downloadUrl;
+      link.download = "Centralizator-QAF-scanare-unica.xlsx";
+      document.body.appendChild(link); link.click(); link.remove(); URL.revokeObjectURL(downloadUrl);
+      const count = response.headers.get("X-QAF-Count") || "0";
+      const limited = response.headers.get("X-QAF-Limit-Reached") === "1";
+      setQafMessage(count + " QAF-uri incluse în centralizator." + (limited ? " Pentru test au fost procesate primele 25 de QAF-uri valide." : ""));
+    } catch (e) { setError(e instanceof Error ? e.message : "Scanarea QAF a eșuat."); }
+    finally { setQafScanning(false); }
+  }
   return <div className="page-wrap inner-page drive-settings-page">
     <section className="project-card drive-config-card">
       <div className="card-heading"><div><h2>OneDrive și destinații de salvare</h2><p>Contul Microsoft este conectat doar de administrator. Conturile tehnicienilor nu se schimbă.</p></div></div>
@@ -66,6 +92,13 @@ export function OneDriveSettings() {
         </div>
         {status.connected && <>
           {status.rootUrl && <a href={status.rootUrl} target="_blank" rel="noreferrer">Deschide dosarul OneDrive ↗</a>}
+          <div className="drive-config-form">
+            <h3>Scanare unică QAF</h3>
+            <p>Lipește linkul unui folder OneDrive sau SharePoint. Sunt scanate recursiv subfolderele, maximum 25 de QAF-uri valide din ultimii patru ani, apoi se descarcă centralizatorul Excel.</p>
+            <label><span>Link folder pentru test</span><input type="url" value={qafFolderUrl} disabled={qafScanning} placeholder="https://...sharepoint.com/..." onChange={event => setQafFolderUrl(event.target.value)} /></label>
+            <div className="drive-config-actions"><button className="primary-button" disabled={qafScanning || !qafFolderUrl.trim()} onClick={() => void scanQafFolder()}>{qafScanning ? "Se scanează…" : "Scanează și descarcă Excel"}</button></div>
+            {qafMessage && <p role="status"><strong>{qafMessage}</strong></p>}
+          </div>
           <div className="drive-config-actions"><button className="secondary-button" disabled={busy} onClick={() => void previewMail()}>Testează importul e-mail</button></div>
           {mailPreview && <div>
             <p><strong>{mailPreview.messages.length} mesaje FITT/IMO recunoscute</strong> din ultimele {mailPreview.scanned} mesaje. Testul nu a creat tichete.</p>
