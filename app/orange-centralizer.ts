@@ -138,7 +138,7 @@ function projectValues(project: ProjectRow) {
   let intervention: {
     assessment?: { cause?: string; arrivedAt?: number; documentedAt?: number; incidentDescription?: string; cableCapacity?: number; damageLocation?: { lat?: number; lon?: number; placedAt?: number } };
     execution?: { remediationDescription?: string };
-    documentation?: { validatedAt?: number; validatedBy?: string; completedByTechnicians?: string[]; closingDate?: string; closingTime?: string; incidentDescription?: string; remediationDescription?: string; incidentInSla?: string; nicmUpdateRequired?: string };
+    documentation?: { validatedAt?: number; validatedBy?: string; completedByTechnicians?: string[]; closingDate?: string; closingTime?: string; county?: string; departureLocality?: string; incidentDescription?: string; remediationDescription?: string; incidentInSla?: string; nicmUpdateRequired?: string };
   } = {};
   try { intervention = project.content_json ? (JSON.parse(project.content_json).intervention ?? {}) : {}; } catch { intervention = {}; }
   const assessment = intervention.assessment;
@@ -150,8 +150,8 @@ function projectValues(project: ProjectRow) {
   return {
     section: project.fo_section_name,
     ticket: project.id,
-    locality: project.departure_locality,
-    county: project.county,
+    locality: validated?.departureLocality?.trim() || project.departure_locality,
+    county: validated?.county?.trim() || project.county,
     technician: project.technician,
     completedBy,
     responsible: validated?.validatedBy ?? "",
