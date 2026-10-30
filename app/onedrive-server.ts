@@ -394,7 +394,7 @@ export async function syncOrangeTicketWorkbook(projectId: string) {
   let intervention: {
     assessment?: { arrivedAt?: number; documentedAt?: number; incidentDescription?: string; cableCapacity?: number; damageLocation?: { lat?: number; lon?: number; placedAt?: number } };
     execution?: { remediationDescription?: string };
-    documentation?: { validatedAt?: number; validatedBy?: string; completedByTechnicians?: string[]; closingDate?: string; closingTime?: string; incidentDescription?: string; remediationDescription?: string; incidentInSla?: string; nicmUpdateRequired?: string };
+    documentation?: { validatedAt?: number; validatedBy?: string; completedByTechnicians?: string[]; closingDate?: string; closingTime?: string; county?: string; departureLocality?: string; incidentDescription?: string; remediationDescription?: string; incidentInSla?: string; nicmUpdateRequired?: string };
   } = {};
   try { intervention = project.documentation_json ? (JSON.parse(project.documentation_json).intervention ?? {}) : {}; } catch { intervention = {}; }
   const assessment = intervention.assessment;
@@ -443,8 +443,8 @@ export async function syncOrangeTicketWorkbook(projectId: string) {
   const desiredValues = [...currentValues];
   desiredValues[1] = project.fo_section_name;
   desiredValues[3] = project.id;
-  desiredValues[4] = project.departure_locality;
-  desiredValues[5] = project.county;
+  desiredValues[4] = documentation?.departureLocality?.trim() || project.departure_locality;
+  desiredValues[5] = documentation?.county?.trim() || project.county;
   desiredValues[6] = documentation?.validatedBy ?? "";
   desiredValues[7] = project.topology;
   desiredValues[8] = project.status === "Finalizat" ? "Raport finalizat" : assessment ? "În lucru" : "Tichet generat";
