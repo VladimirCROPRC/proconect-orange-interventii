@@ -182,6 +182,8 @@ export type InterventionDocumentationSummary = {
   completedByTechnicians?: string[];
   closingDate?: string;
   closingTime?: string;
+  county?: string;
+  departureLocality?: string;
   incidentInSla?: InterventionCentralizerChoice;
   nicmUpdateRequired?: InterventionCentralizerChoice;
   validatedAt: number;
