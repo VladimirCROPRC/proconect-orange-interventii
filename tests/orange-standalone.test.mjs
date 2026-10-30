@@ -161,6 +161,27 @@ test("Orange county is selected from the searchable approved list", async () => 
   assert.equal((counties.match(/Vâlcea County/g) ?? []).length, 1);
 });
 
+test("Documentation location feeds QAF and both centralizers", async () => {
+  const operations = await source("app/intervention-operations.tsx");
+  const server = await source("app/project-server.ts");
+  const qaf = await source("app/orange-qaf.ts");
+  const centralizer = await source("app/orange-centralizer.ts");
+  const oneDrive = await source("app/onedrive-server.ts");
+  assert.match(operations, /Județ/);
+  assert.match(operations, /intervention-documentation-counties/);
+  assert.match(operations, /Localitate plecare echipă/);
+  assert.match(operations, /county: documentationCounty\.trim\(\)/);
+  assert.match(operations, /departureLocality: documentationDepartureLocality\.trim\(\)/);
+  assert.match(server, /documentationCountyCandidate/);
+  assert.match(server, /orangeCountySet\.has\(documentationCountyCandidate\)/);
+  assert.match(qaf, /\["H14", documentation\.county\]/);
+  assert.match(qaf, /documentationDepartureLocality \|\| row\.departure_locality/);
+  assert.match(centralizer, /validated\?\.county\?\.trim\(\) \|\| project\.county/);
+  assert.match(centralizer, /validated\?\.departureLocality\?\.trim\(\) \|\| project\.departure_locality/);
+  assert.match(oneDrive, /documentation\?\.county\?\.trim\(\) \|\| project\.county/);
+  assert.match(oneDrive, /documentation\?\.departureLocality\?\.trim\(\) \|\| project\.departure_locality/);
+});
+
 test("Orange ticket creation only requires the ticket number and uses the manual request date and time", async () => {
   const page = await source("app/page.tsx");
   const server = await source("app/project-server.ts");
