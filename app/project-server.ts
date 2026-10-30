@@ -834,6 +834,9 @@ export async function saveFieldDocumentation(projectId: string, section: string,
       const resolvedCompletedBy = await resolveTechnicians(completedByTechnicians);
       const closingTime = typeof intervention.documentation.closingTime === "string" ? intervention.documentation.closingTime.trim() : "";
       const closingDate = typeof intervention.documentation.closingDate === "string" ? intervention.documentation.closingDate.trim() : "";
+      const documentationCountyCandidate = typeof intervention.documentation.county === "string" ? intervention.documentation.county.trim().slice(0, 100) : "";
+      const documentationCounty = orangeCountySet.has(documentationCountyCandidate) ? documentationCountyCandidate : "";
+      const documentationDepartureLocality = typeof intervention.documentation.departureLocality === "string" ? intervention.documentation.departureLocality.trim().slice(0, 150) : "";
       const incidentInSla = typeof intervention.documentation.incidentInSla === "string" ? intervention.documentation.incidentInSla.trim() : "";
       const nicmUpdateRequired = typeof intervention.documentation.nicmUpdateRequired === "string" ? intervention.documentation.nicmUpdateRequired.trim() : "";
       if (!incidentDescription || !remediationDescription || incidentDescription.length > 2_000 || remediationDescription.length > 2_000) {
@@ -841,6 +844,9 @@ export async function saveFieldDocumentation(projectId: string, section: string,
       }
       if (resolvedCompletedBy.length !== completedByTechnicians.length) {
         return { error: "Unul dintre tehnicienii selectați pentru finalizarea intervenției nu este disponibil.", status: 400 as const };
+      }
+      if (documentationCountyCandidate && !documentationCounty) {
+        return { error: "Selectează județul din lista disponibilă.", status: 400 as const };
       }
       if (!orangeCentralizerChoices.has(incidentInSla) || !orangeCentralizerChoices.has(nicmUpdateRequired)) {
         return { error: "Selectează Incident în SLA și Necesită actualizare în NICM.", status: 400 as const };
@@ -880,6 +886,8 @@ export async function saveFieldDocumentation(projectId: string, section: string,
           completedByTechnicians: resolvedCompletedBy.map((technician) => technician.name),
           closingDate,
           closingTime,
+          county: documentationCounty,
+          departureLocality: documentationDepartureLocality,
           incidentInSla: incidentInSla as InterventionDocumentationSummary["incidentInSla"],
           nicmUpdateRequired: nicmUpdateRequired as InterventionDocumentationSummary["nicmUpdateRequired"],
           services,
