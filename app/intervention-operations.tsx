@@ -8,6 +8,7 @@ import { analysisCapturedAt, analysisCoordinates, analyzeCoordinatorPhoto } from
 import { currentBucharestIsoDate, formatManualTimeInput, romanianDateToIso, romanianDateTimeToTimestamp, timestampToRomanianDateTime, validManualTime } from "./manual-date-time";
 import { OroSiteMapLink } from "./oro-lookup";
 import { orangeMaterials, proconectMaterials } from "./orange-materials";
+import { orangeCounties } from "./orange-counties";
 import { orangeServicePackages } from "./orange-services";
 import type { InterventionCause, InterventionCentralizerChoice, InterventionDamageType, InterventionExecutionActivity, InterventionFieldSummary, InterventionMaterialSelection } from "./field-documentation";
 import type { ProjectRecord } from "./project-data";
@@ -194,6 +195,8 @@ export function InterventionOperationsSection({
   const [uploadingDocumentationPhotos, setUploadingDocumentationPhotos] = useState(false);
   const [incidentInSla, setIncidentInSla] = useState<InterventionCentralizerChoice | "">(initialSummary?.documentation?.incidentInSla ?? "");
   const [nicmUpdateRequired, setNicmUpdateRequired] = useState<InterventionCentralizerChoice | "">(initialSummary?.documentation?.nicmUpdateRequired ?? "");
+  const [documentationCounty, setDocumentationCounty] = useState(initialSummary?.documentation?.county ?? project.county ?? "");
+  const [documentationDepartureLocality, setDocumentationDepartureLocality] = useState(initialSummary?.documentation?.departureLocality ?? project.departureLocality ?? "");
 
   useEffect(() => {
     let mounted = true;
@@ -280,6 +283,8 @@ export function InterventionOperationsSection({
       if (mounted) setClosingTime(initialSummary?.documentation?.closingTime ?? "");
       if (mounted) setIncidentInSla(initialSummary?.documentation?.incidentInSla ?? "");
       if (mounted) setNicmUpdateRequired(initialSummary?.documentation?.nicmUpdateRequired ?? "");
+      if (mounted) setDocumentationCounty(initialSummary?.documentation?.county ?? project.county ?? "");
+      if (mounted) setDocumentationDepartureLocality(initialSummary?.documentation?.departureLocality ?? project.departureLocality ?? "");
     });
     return () => {
       mounted = false;
@@ -489,6 +494,8 @@ export function InterventionOperationsSection({
           remediationDescription: reviewRemediation.trim(),
           closingDate,
           closingTime,
+          county: documentationCounty.trim(),
+          departureLocality: documentationDepartureLocality.trim(),
           incidentInSla: incidentInSla as InterventionCentralizerChoice,
           nicmUpdateRequired: nicmUpdateRequired as InterventionCentralizerChoice,
           completedByTechnicians,
@@ -821,6 +828,33 @@ export function InterventionOperationsSection({
                 <label className="intervention-damage-field"><span>Ora de închidere *</span><input type="text" inputMode="numeric" placeholder="HH:MM" pattern={"(?:[01]\\d|2[0-3]):[0-5]\\d"} maxLength={5} required value={closingTime} readOnly={project.status === "Finalizat"} onChange={(event) => setClosingTime(formatManualTimeInput(event.target.value))} /></label>
               </div>
               <small>Data și ora sunt introduse manual de coordonator și se transmit în QAF și Centralizator.</small>
+              <div className="intervention-material-source-lists">
+                <label className="intervention-damage-field">
+                  <span>Județ</span>
+                  <input
+                    type="search"
+                    list="intervention-documentation-counties"
+                    value={documentationCounty}
+                    readOnly={project.status === "Finalizat"}
+                    onChange={(event) => setDocumentationCounty(event.target.value)}
+                    placeholder="Caută și selectează județul"
+                  />
+                  <datalist id="intervention-documentation-counties">{orangeCounties.map((county) => <option key={county} value={county} />)}</datalist>
+                  <small>Precompletat din detaliile tichetului când este disponibil; se transmite în QAF și Centralizator.</small>
+                </label>
+                <label className="intervention-damage-field">
+                  <span>Localitate plecare echipă</span>
+                  <input
+                    type="text"
+                    maxLength={150}
+                    value={documentationDepartureLocality}
+                    readOnly={project.status === "Finalizat"}
+                    onChange={(event) => setDocumentationDepartureLocality(event.target.value)}
+                    placeholder="Ex.: Cluj-Napoca"
+                  />
+                  <small>Precompletată din detaliile tichetului când este disponibilă și transmisă în QAF și Centralizator.</small>
+                </label>
+              </div>
               <div className="intervention-material-source-lists">
                 <label className="intervention-damage-field">
                   <span>Incident în SLA *</span>
