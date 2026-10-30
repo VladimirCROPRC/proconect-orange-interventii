@@ -450,3 +450,21 @@ test("closing an Orange ticket publishes the final QAF before queued files", asy
   assert.match(qaf, /writeCachedValuePreservingFormula\(mainXml, "C79"/);
   assert.match(qaf, /writeQuantity\(servicesXml, `E\$\{service\.qafRow\}`, quantity\)/);
 });
+
+
+test("admin can scan a manually selected OneDrive folder for QAF workbooks", async () => {
+  const scanner = await source("app/qaf-scan.ts");
+  const server = await source("app/onedrive-server.ts");
+  const route = await source("app/api/onedrive/qaf-scan/route.ts");
+  const settings = await source("app/onedrive-settings.tsx");
+  assert.match(scanner, /parseQafWorkbook/);
+  assert.match(scanner, /C29/);
+  assert.match(scanner, /MATERIALE DECLARATE/);
+  assert.match(scanner, /MATERIALE SUGERATE/);
+  assert.match(scanner, /qaf_material_service_suggestions/);
+  assert.match(server, /scanOneDriveQafFolder/);
+  assert.match(server, /scanned\.length >= 25/);
+  assert.match(route, /Centralizator-QAF-scanare-unica\.xlsx/);
+  assert.match(settings, /Link folder pentru test/);
+  assert.match(settings, /Scanează și descarcă Excel/);
+});
