@@ -7,6 +7,7 @@ import { buildMaterialSheetPdf } from "./material-pdf";
 import { buildOrangeQafXlsx } from "./orange-qaf";
 import { buildOrangeKmz } from "./orange-kmz";
 import { parseOrangeMail } from "./orange-mail";
+import { buildQafScanXlsx, parseQafWorkbook, suggestQafSelections, type QafScanInput } from "./qaf-scan";
 import { base64url, decode64, fixedOrigin, preserveManualWorkbookCells, retryDelay, safeName, usesOneDrive, validMode, workbookTicketRow, type BackupMode, type WorkbookCell } from "./onedrive-core";
 
 type Environment = { PROCONECT_APP_URL?: string; ONEDRIVE_CLIENT_ID?: string; ONEDRIVE_TENANT_ID?: string; ONEDRIVE_CLIENT_SECRET?: string; ONEDRIVE_ENCRYPTION_KEY?: string; ORANGE_TICKETS_WORKBOOK_URL?: string };
@@ -75,7 +76,8 @@ async function exchange(parameters: URLSearchParams) {
 }
 async function graph(token: string, path: string, options: RequestInit = {}) {
   const workbookPath = /^\/drives\/[^/]+\/items\/[^/]+\/workbook(?:\/|$)/.test(path);
-  if (!path.startsWith("/me/drive") && !path.startsWith("/me/mailFolders/") && !path.startsWith("/shares/") && !workbookPath) throw new Error("Adresă Graph nepermisă.");
+  const driveItemPath = /^\\/drives\\/[^/]+\\/items\\/[^/]+(?:\\/|$)/.test(path);
+  if (!path.startsWith("/me/drive") && !path.startsWith("/me/mailFolders/") && !path.startsWith("/shares/") && !workbookPath && !driveItemPath) throw new Error("Adresă Graph nepermisă.");
   const headers = new Headers(options.headers); headers.set("Authorization", `Bearer ${token}`);
   return fetch(`https://graph.microsoft.com/v1.0${path}`, { ...options, headers, signal: AbortSignal.timeout(20_000) });
 }
@@ -222,6 +224,107 @@ export async function readOrangeMail(since = 0, limit = 25) {
   const messages = (payload.value ?? []).map(parseOrangeMail).filter((item): item is NonNullable<typeof item> => Boolean(item?.messageId));
   return { scanned: payload.value?.length ?? 0, messages };
 }
+type QafScanDriveItem = {
+  id?: string;
+  name?: string;
+  webUrl?: string;
+  size?: number;
+  lastModifiedDateTime?: string;
+  file?: object;
+  folder?: object;
+  parentReference?: { driveId?: string };
+  remoteItem?: {
+    id?: string;
+    name?: string;
+    folder?: object;
+    parentReference?: { driveId?: string };
+  };
+};
+
+type QafScanDriveCollection = {
+  value?: QafScanDriveItem[];
+  "@odata.nextLink"?: string;
+};
+
+function qafScanDate(value: string) {
+  const match = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(value);
+  if (!match) return 0;
+  return Date.UTC(Number(match[3]), Number(match[2]) - 1, Number(match[1]));
+}
+
+export async function scanOneDriveQafFolder(folderUrl: string) {
+  let selectedUrl: URL;
+  try { selectedUrl = new URL(folderUrl.trim()); }
+  catch { throw new Error("Introdu un link valid către folderul OneDrive sau SharePoint."); }
+  const host = selectedUrl.hostname.toLowerCase();
+  if (selectedUrl.protocol !== "https:" || (host !== "1drv.ms" && !host.endsWith(".sharepoint.com"))) {
+    throw new Error("Folderul trebuie selectat printr-un link OneDrive sau SharePoint HTTPS.");
+  }
+  const c = await connection();
+  if (!c?.refresh_token) throw new Error("Conectează contul Microsoft 365 înainte de scanare.");
+  const token = await tokenFor(c);
+  const shareId = "u!" + base64url(encoder.encode(selectedUrl.toString()));
+  const shared = await graphJson<QafScanDriveItem>(await graph(token, "/shares/" + encodeURIComponent(shareId) + "/driveItem?$select=id,name,folder,parentReference,remoteItem"));
+  const selected = shared.remoteItem ?? shared;
+  const rootId = selected.id;
+  const driveId = selected.parentReference?.driveId ?? shared.parentReference?.driveId;
+  if (!rootId || !driveId || !selected.folder) throw new Error("Linkul selectat nu indică un folder OneDrive accesibil.");
+
+  const cutoff = Date.now() - Math.round(4 * 365.25 * 24 * 60 * 60 * 1000);
+  const folders = [{ id: rootId, path: selected.name || shared.name || "Folder selectat" }];
+  const candidates: Array<{ id: string; name: string; path: string }> = [];
+  let visited = 0;
+  while (folders.length && candidates.length < 100 && visited < 5000) {
+    const current = folders.shift()!;
+    let nextPath = "/drives/" + encodeURIComponent(driveId) + "/items/" + encodeURIComponent(current.id) + "/children?$top=200&$select=id,name,file,folder,size,lastModifiedDateTime";
+    while (nextPath && candidates.length < 100 && visited < 5000) {
+      const page = await graphJson<QafScanDriveCollection>(await graph(token, nextPath));
+      for (const item of page.value ?? []) {
+        if (!item.id || !item.name) continue;
+        visited += 1;
+        const itemPath = current.path + "/" + item.name;
+        if (item.folder) {
+          folders.push({ id: item.id, path: itemPath });
+          continue;
+        }
+        const modifiedAt = Date.parse(item.lastModifiedDateTime ?? "");
+        if (/\.xlsx$/i.test(item.name) && Number(item.size ?? 0) <= 20 * 1024 * 1024 && (!Number.isFinite(modifiedAt) || modifiedAt >= cutoff)) {
+          candidates.push({ id: item.id, name: item.name, path: itemPath });
+        }
+      }
+      const nextLink = page["@odata.nextLink"];
+      if (!nextLink) break;
+      const nextUrl = new URL(nextLink);
+      nextPath = nextUrl.pathname.replace(/^\/v1\.0/, "") + nextUrl.search;
+    }
+  }
+
+  const scanned: QafScanInput[] = [];
+  for (const file of candidates) {
+    if (scanned.length >= 25) break;
+    const response = await graph(token, "/drives/" + encodeURIComponent(driveId) + "/items/" + encodeURIComponent(file.id) + "/content");
+    if (!response.ok) continue;
+    try {
+      const parsed = await parseQafWorkbook(await response.arrayBuffer(), file.path);
+      if (!parsed) continue;
+      const internalDate = qafScanDate(parsed.date);
+      if (internalDate && internalDate < cutoff) continue;
+      scanned.push({ ...parsed, id: file.id, fileName: file.name, path: file.path });
+    } catch {
+      // Other Excel files and damaged workbooks are ignored during this one-time test.
+    }
+  }
+  if (!scanned.length) throw new Error("Nu a fost găsit niciun QAF valid din ultimii patru ani în folderul selectat.");
+  const suggestions = await suggestQafSelections(scanned);
+  const workbook = buildQafScanXlsx(scanned, suggestions, selectedUrl.toString());
+  return {
+    workbook: workbook.buffer.slice(workbook.byteOffset, workbook.byteOffset + workbook.byteLength) as ArrayBuffer,
+    qafCount: scanned.length,
+    visited,
+    limitReached: scanned.length >= 25,
+  };
+}
+
 type OrangeWorkbookDriveItem = {
   id?: string;
   parentReference?: { driveId?: string };
