@@ -458,6 +458,9 @@ test("admin can scan a manually selected OneDrive folder for QAF workbooks", asy
   const route = await source("app/api/onedrive/qaf-scan/route.ts");
   const settings = await source("app/onedrive-settings.tsx");
   assert.match(scanner, /parseQafWorkbook/);
+  assert.match(scanner, /materialSelections/);
+  assert.match(scanner, /serviceSelections/);
+  assert.match(scanner, /quantity\|cantitate\|qty/);
   assert.match(scanner, /C29/);
   assert.match(scanner, /MATERIALE DECLARATE/);
   assert.match(scanner, /MATERIALE SUGERATE/);
