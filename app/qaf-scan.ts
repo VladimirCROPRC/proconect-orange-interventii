@@ -100,6 +100,66 @@ function quantity(sheetXml: string, reference: string, strings: string[]) {
   return Number.isFinite(value) && value > 0 ? value : 0;
 }
 
+function normalizedHeader(value: string) {
+  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
+}
+
+function tableHeaders(sheetXml: string, strings: string[]) {
+  return Array.from({ length: 26 }, (_unused, index) => normalizedHeader(cellValue(sheetXml, columnName(index) + "1", strings)));
+}
+
+function maximumSheetRow(sheetXml: string) {
+  return Math.max(1, ...Array.from(sheetXml.matchAll(/<row\b[^>]*\br="(\d+)"/g), (match) => Number(match[1]) || 1));
+}
+
+function headerColumn(headers: string[], pattern: RegExp) {
+  const index = headers.findIndex((header) => pattern.test(header));
+  return index >= 0 ? columnName(index) : "";
+}
+
+function materialSelections(sheetXml: string, strings: string[], source: "orange" | "proconect") {
+  const headers = tableHeaders(sheetXml, strings);
+  const codeColumn = headerColumn(headers, /\b(?:item|oro|sap)?\s*code\b|\bcod(?:\s+articol)?\b/);
+  const descriptionColumn = headerColumn(headers, /description|descriere/);
+  const unitColumn = headerColumn(headers, /^unit$|unitate|u\.?\s*m\.?/);
+  const quantityColumn = headerColumn(headers, /quantity|cantitate|qty/);
+  if (!codeColumn || !quantityColumn) return [] as DeclaredMaterial[];
+  const result: DeclaredMaterial[] = [];
+  for (let row = 2; row <= maximumSheetRow(sheetXml); row += 1) {
+    const selected = quantity(sheetXml, quantityColumn + row, strings);
+    if (!selected) continue;
+    const code = cellValue(sheetXml, codeColumn + row, strings).trim();
+    const description = descriptionColumn ? cellValue(sheetXml, descriptionColumn + row, strings).trim() : "";
+    const unit = unitColumn ? cellValue(sheetXml, unitColumn + row, strings).trim() : "";
+    if (code || description) result.push({ source, code, description, unit, quantity: selected });
+  }
+  return result;
+}
+
+function serviceSelections(sheetXml: string, strings: string[]) {
+  const headers = tableHeaders(sheetXml, strings);
+  const quantityColumn = headerColumn(headers, /quantity|cantitate|qty/);
+  const unitColumn = headerColumn(headers, /^unit$|unitate|u\.?\s*m\.?/);
+  const codeColumn = headerColumn(headers, /\b(?:item|service|package)?\s*code\b|\bcod\b/)
+    || headerColumn(headers, /item description|descriere articol|description/);
+  if (!quantityColumn || !codeColumn) return [] as DeclaredService[];
+  const result: DeclaredService[] = [];
+  for (let row = 2; row <= maximumSheetRow(sheetXml); row += 1) {
+    const selected = quantity(sheetXml, quantityColumn + row, strings);
+    if (!selected) continue;
+    const code = cellValue(sheetXml, codeColumn + row, strings).trim();
+    const catalogItem = orangeServicePackages.find((item) => item.code === code || item.qafRow === row);
+    const details = cellValue(sheetXml, "F" + row, strings).trim();
+    if (code || catalogItem) result.push({
+      code: code || catalogItem!.code,
+      description: details || catalogItem?.description || "",
+      unit: unitColumn ? cellValue(sheetXml, unitColumn + row, strings).trim() : catalogItem?.unit || "",
+      quantity: selected,
+    });
+  }
+  return result;
+}
+
 function qafDate(sheetXml: string, strings: string[]) {
   for (const row of [79, 21, 18]) {
     const day = Number(cellValue(sheetXml, "C" + row, strings));
@@ -135,20 +195,11 @@ export async function parseQafWorkbook(buffer: ArrayBuffer, path: string): Promi
   const strings = sharedStrings(sheet("xl/sharedStrings.xml"));
   const ticket = normalizedTicket(main, strings, path);
   if (!ticket) return null;
-  const materials: DeclaredMaterial[] = [];
-  orangeMaterials.forEach((item, index) => {
-    const selected = quantity(orangeSheet, "D" + (index + 2), strings);
-    if (selected) materials.push({ source: "orange", ...item, quantity: selected });
-  });
-  proconectMaterials.forEach((item, index) => {
-    const selected = quantity(proconectSheet, "E" + (index + 2), strings);
-    if (selected) materials.push({ source: "proconect", ...item, quantity: selected });
-  });
-  const services: DeclaredService[] = [];
-  orangeServicePackages.forEach((item) => {
-    const selected = quantity(servicesSheet, "E" + item.qafRow, strings);
-    if (selected) services.push({ code: item.code, description: item.description, unit: item.unit, quantity: selected });
-  });
+  const materials = [
+    ...materialSelections(orangeSheet, strings, "orange"),
+    ...materialSelections(proconectSheet, strings, "proconect"),
+  ];
+  const services = serviceSelections(servicesSheet, strings);
   return {
     ticket,
     date: qafDate(main, strings),
