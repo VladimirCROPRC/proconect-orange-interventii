@@ -76,7 +76,7 @@ async function exchange(parameters: URLSearchParams) {
 }
 async function graph(token: string, path: string, options: RequestInit = {}) {
   const workbookPath = /^\/drives\/[^/]+\/items\/[^/]+\/workbook(?:\/|$)/.test(path);
-  const driveItemPath = /^\\/drives\\/[^/]+\\/items\\/[^/]+(?:\\/|$)/.test(path);
+  const driveItemPath = /^\/drives\/[^/]+\/items\/[^/]+(?:\/|$)/.test(path);
   if (!path.startsWith("/me/drive") && !path.startsWith("/me/mailFolders/") && !path.startsWith("/shares/") && !workbookPath && !driveItemPath) throw new Error("Adresă Graph nepermisă.");
   const headers = new Headers(options.headers); headers.set("Authorization", `Bearer ${token}`);
   return fetch(`https://graph.microsoft.com/v1.0${path}`, { ...options, headers, signal: AbortSignal.timeout(20_000) });
