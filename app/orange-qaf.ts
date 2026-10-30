@@ -64,10 +64,10 @@ function writeQuantity(xml: string, cell: string, quantity: number) {
 
 async function orangeDocumentation(projectId: string) {
   const row = await getRawDb().prepare(
-    "SELECT projects.client, projects.address, projects.fo_section_name, projects.topology, projects.cable_capacity, projects.route_type, projects.orange_intervention_type, projects.sla, projects.departure_locality, projects.scheduled_label, projects.status, projects.updated_at, project_field_documentation.content_json, project_field_documentation.updated_at AS documentation_updated_at FROM projects LEFT JOIN project_field_documentation ON project_field_documentation.project_id = projects.id WHERE projects.id = ? LIMIT 1",
+    "SELECT projects.client, projects.address, projects.fo_section_name, projects.topology, projects.cable_capacity, projects.route_type, projects.orange_intervention_type, projects.sla, projects.departure_locality, projects.county, projects.scheduled_label, projects.status, projects.updated_at, project_field_documentation.content_json, project_field_documentation.updated_at AS documentation_updated_at FROM projects LEFT JOIN project_field_documentation ON project_field_documentation.project_id = projects.id WHERE projects.id = ? LIMIT 1",
   ).bind(projectId).first<{
     client: string; address: string; fo_section_name: string; topology: string; cable_capacity: number;
-    route_type: string; orange_intervention_type: string; sla: string; departure_locality: string; scheduled_label: string; status: string; updated_at: number;
+    route_type: string; orange_intervention_type: string; sla: string; departure_locality: string; county: string; scheduled_label: string; status: string; updated_at: number;
     content_json: string | null; documentation_updated_at: number | null;
   }>();
   if (!row) return null;
@@ -83,6 +83,8 @@ async function orangeDocumentation(projectId: string) {
   let validatedBy = "";
   let closingDate = "";
   let closingTime = "";
+  let documentationCounty = "";
+  let documentationDepartureLocality = "";
   let services: Array<{ code?: string; quantity?: number }> = [];
   let cause = "";
   let assessedCableCapacity = 0;
@@ -93,7 +95,7 @@ async function orangeDocumentation(projectId: string) {
         intervention?: {
           assessment?: { cause?: string; arrivedAt?: number; incidentDescription?: string; damageLocation?: DamageLocation; documentedAt?: number; siteMeasurement?: SiteMeasurement; cableCapacity?: number; routeType?: string };
           execution?: { materials?: Material[]; activities?: ExecutionActivity[]; remediationDescription?: string };
-          documentation?: { incidentDescription?: string; remediationDescription?: string; services?: Array<{ code?: string; quantity?: number }>; validatedAt?: number; validatedBy?: string; closingDate?: string; closingTime?: string };
+          documentation?: { incidentDescription?: string; remediationDescription?: string; services?: Array<{ code?: string; quantity?: number }>; validatedAt?: number; validatedBy?: string; closingDate?: string; closingTime?: string; county?: string; departureLocality?: string };
         };
       };
       materials = Array.isArray(documentation.intervention?.execution?.materials) ? documentation.intervention!.execution!.materials! : [];
@@ -108,6 +110,8 @@ async function orangeDocumentation(projectId: string) {
       validatedBy = documentation.intervention?.documentation?.validatedBy?.trim() ?? "";
       closingDate = documentation.intervention?.documentation?.closingDate?.trim() ?? "";
       closingTime = documentation.intervention?.documentation?.closingTime?.trim() ?? "";
+      documentationCounty = documentation.intervention?.documentation?.county?.trim() ?? "";
+      documentationDepartureLocality = documentation.intervention?.documentation?.departureLocality?.trim() ?? "";
       services = Array.isArray(documentation.intervention?.documentation?.services) ? documentation.intervention!.documentation!.services! : [];
       cause = documentation.intervention?.assessment?.cause ?? "";
       assessedCableCapacity = Number(documentation.intervention?.assessment?.cableCapacity) || 0;
@@ -134,7 +138,7 @@ async function orangeDocumentation(projectId: string) {
       .slice(0, 4),
     siteA: row.client ?? "", siteB: row.address ?? "", foSectionName: row.fo_section_name ?? "",
     topology: row.topology ?? "", cableCapacity: assessedCableCapacity || Number(row.cable_capacity) || 0, routeType: assessedRouteType || row.route_type || "",
-    interventionType: row.orange_intervention_type ?? "", sla: row.sla ?? "", departureLocality: row.departure_locality ?? "", requestDate: row.scheduled_label ?? "",
+    interventionType: row.orange_intervention_type ?? "", sla: row.sla ?? "", county: documentationCounty || row.county || "", departureLocality: documentationDepartureLocality || row.departure_locality || "", requestDate: row.scheduled_label ?? "",
   };
 }
 
@@ -299,7 +303,7 @@ export async function buildOrangeQafXlsx(projectId: string) {
   const textCells: Array<[string, string]> = [
     ["D5", documentation.siteA], ["K5", documentation.siteB], ["D7", documentation.foSectionName],
     ["D9", documentation.topology], ["I11", documentation.routeType], ["D14", documentation.interventionType],
-    ["F14", documentation.sla], ["D15", qafTicketNumber(projectId)], ["D16", documentation.departureLocality], ["C23", documentation.cause],
+    ["F14", documentation.sla], ["H14", documentation.county], ["D15", qafTicketNumber(projectId)], ["D16", documentation.departureLocality], ["C23", documentation.cause],
     ["C25", documentation.incidentDescription], ["C29", documentation.remediationDescription], ["C77", documentation.validatedBy],
   ];
   for (const [cell, value] of textCells) {
