@@ -23,8 +23,10 @@ function normalizeSubject(value: string) {
   return value.replace(/^(?:(?:RE|FW|FWD)\s*:\s*)+/i, "").trim();
 }
 
-function fittOdbCode(body: string) {
-  return (/\bODB\s*:\s*([A-Z0-9][A-Z0-9_-]*)/i.exec(body)?.[1] ?? "").toUpperCase();
+function fittOdbCode(content: string) {
+  const embeddedCode = /\b([A-Z]{2}\d{4}FAN\d+ODB[A-Z0-9]{3,})\b/i.exec(content)?.[1];
+  if (embeddedCode) return embeddedCode.toUpperCase();
+  return (/\bODB\s*:\s*([A-Z0-9][A-Z0-9_-]*)/i.exec(content)?.[1] ?? "").toUpperCase();
 }
 
 function fittSiteCode(value: string) {
@@ -44,7 +46,7 @@ export function parseOrangeMail(message: { id?: string; subject?: string; receiv
   if (flow === "FITT") {
     const locality = field(body, "Locality").replace(/\s*\((?:LOC|UAT)\)\s*$/i, "").trim();
     const oltEdfaName = field(body, "OLT/EDFA name");
-    const odbCode = fittOdbCode(body);
+    const odbCode = fittOdbCode(`${originalSubject}\n${body}`);
     return {
       messageId: String(message.id ?? ""), ticketId, flow, subject,
       receivedAt: String(message.receivedDateTime ?? ""),
