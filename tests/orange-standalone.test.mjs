@@ -270,6 +270,12 @@ test("mail preview recognizes the FITT and IMO message formats", async () => {
   assert.equal(fittWithOdb.siteA, "TI0004");
   assert.equal(fittWithOdb.foSection, "TI0004FAN1ODB11537");
 
+  const fittWithEmbeddedOdb = parser.parseOrangeMail({
+    id: "mail-fitt-embedded-odb", subject: "FITT00000141519 / Assigned / Minor / ORO", receivedDateTime: "2026-09-21T11:13:00Z",
+    body: { content: "OLT/EDFA name:: OLT1-TI0004\nSeverity:: Minor\nIncident description:: Verificare solicitata pentru TI0004FAN1ODB99887 in zona de last mile" },
+  });
+  assert.equal(fittWithEmbeddedOdb.foSection, "TI0004FAN1ODB99887");
+
   const fittCluj = parser.parseOrangeMail({
     id: "mail-fitt-cluj", subject: "FITT00000141518 / Assigned / Minor / ORO", receivedDateTime: "2026-09-21T11:12:00Z",
     body: { content: "OLT/EDFA name:: OLT1-CL2981\nSeverity:: Minor\nIncident description:: Verificare site" },
