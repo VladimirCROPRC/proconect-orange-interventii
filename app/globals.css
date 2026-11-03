@@ -11849,3 +11849,131 @@ td > small {
 .inventory-movement div{display:flex;flex-direction:column;gap:3px}
 .inventory-movement span,.inventory-movement small{color:#71809a}
 @media(max-width:900px){.inventory-page{padding:24px 16px 60px}.inventory-grid{grid-template-columns:1fr}.inventory-form-row{grid-template-columns:1fr}.inventory-table{overflow-x:auto}.inventory-table-row{min-width:720px}.inventory-movement{grid-template-columns:1fr}.inventory-page .page-heading{flex-direction:column}}
+
+
+/* Team contractor administration */
+.account-contractor {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 100px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+
+.account-contractor > span,
+.contractor-create-form label > span {
+  color: #65736b;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.account-contractor select,
+.contractor-create-form input {
+  width: 100%;
+  min-height: 39px;
+  padding: 8px 11px;
+  border: 1px solid #d8e0dc;
+  border-radius: 7px;
+  color: #28384f;
+  background: #fff;
+  font: inherit;
+}
+
+.contractor-admin-card {
+  margin-top: 18px;
+  padding-bottom: 20px;
+}
+
+.contractor-create-form {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) auto;
+  align-items: end;
+  gap: 12px;
+  padding: 0 20px 18px;
+}
+
+.contractor-create-form label {
+  display: grid;
+  gap: 7px;
+}
+
+.contractor-list {
+  display: grid;
+  gap: 8px;
+  padding: 0 20px;
+}
+
+.contractor-row {
+  display: flex;
+  min-height: 64px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 14px;
+  border: 1px solid #e3e9e6;
+  border-radius: 9px;
+  background: #fcfdfc;
+}
+
+.contractor-row > div {
+  display: grid;
+  gap: 4px;
+}
+
+.contractor-row strong {
+  color: #28384f;
+  font-size: 13px;
+}
+
+.contractor-row small {
+  color: #89958f;
+  font-size: 11px;
+}
+
+.danger-button {
+  color: #b42336;
+  border-color: #ecc8cc;
+}
+
+.danger-button:disabled {
+  cursor: not-allowed;
+  opacity: .45;
+}
+
+.contractor-empty {
+  padding: 28px;
+  border: 1px dashed #ccd7d1;
+  border-radius: 9px;
+  color: #65736b;
+  text-align: center;
+}
+
+.contractor-empty p {
+  margin: 6px 0 0;
+  color: #8b9690;
+  font-size: 12px;
+}
+
+@media (max-width: 700px) {
+  .contractor-create-form {
+    grid-template-columns: 1fr;
+    padding: 0 14px 16px;
+  }
+
+  .contractor-list {
+    padding: 0 14px;
+  }
+
+  .contractor-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .contractor-row button {
+    width: 100%;
+  }
+
+  .account-contractor {
+    grid-template-columns: 1fr;
+  }
+}
