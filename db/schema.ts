@@ -25,6 +25,18 @@ export const appUsers = sqliteTable(
   ],
 );
 
+export const technicianContractors = sqliteTable("technician_contractors", {
+  technicianUsername: text("technician_username").primaryKey(),
+  contractor: text("contractor").notNull().default(""),
+  updatedAt: integer("updated_at").notNull(),
+});
+
+export const contractors = sqliteTable("contractors", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  createdAt: integer("created_at").notNull(),
+}, (table) => [uniqueIndex("contractors_name_idx").on(table.name)]);
+
 export const appSessions = sqliteTable(
   "app_sessions",
   {
