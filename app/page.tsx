@@ -81,6 +81,7 @@ type Project = ProjectRecord;
 
 type Account = {
   username: string;
+  email: string;
   name: string;
   role: "Admin" | "Manager" | "Coordonator" | "Tehnician";
   contractor: string;
@@ -91,8 +92,8 @@ type Account = {
 type SignedInAccount = Account & { passwordResetRequired: boolean };
 
 const initialAccounts: Account[] = [
-  { username: "vladimir.carlan", name: "Vladimir", role: "Admin", contractor: "", active: true, jobs: 0 },
-  { username: "vlad", name: "Vlad", role: "Tehnician", contractor: "", active: true, jobs: 4 },
+  { username: "vladimir.carlan", email: "vladimir.carlan@proconect.ro", name: "Vladimir", role: "Admin", contractor: "", active: true, jobs: 0 },
+  { username: "vlad", email: "vlad@proconect.ro", name: "Vlad", role: "Tehnician", contractor: "", active: true, jobs: 4 },
 ];
 
 const emptyProject: Project = {
@@ -979,9 +980,9 @@ export default function Home() {
   async function createAccount(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    const username = String(form.get("username"));
-    if (accounts.some((account) => account.username === username)) {
-      showToast("Username-ul este deja folosit.");
+    const email = String(form.get("email") || "").trim().toLowerCase();
+    if (accounts.some((account) => account.email === email)) {
+      showToast("Adresa de e-mail este deja asociată unui cont.");
       return;
     }
     try {
@@ -990,10 +991,9 @@ export default function Home() {
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          username,
+          email,
           name: String(form.get("name")),
           role: String(form.get("role")),
-          password: String(form.get("password")),
           contractor: String(form.get("contractor") || ""),
         }),
       });
@@ -1001,7 +1001,7 @@ export default function Home() {
       if (!response.ok || !payload.account) throw new Error(payload.error || "Contul nu a putut fi creat.");
       setAccounts((current) => [...current, payload.account!]);
       setModal(null);
-      showToast(`Contul ${username} a fost creat.`);
+      showToast(`Contul pentru ${email} a fost creat.`);
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Contul nu a putut fi creat.");
     }
@@ -1873,11 +1873,10 @@ export default function Home() {
         )}
         {modal === "account" && (
           <form className="modal small-modal" onSubmit={createAccount}>
-            <div className="modal-head"><div><span className="modal-kicker">CONT NOU</span><h2>Adaugă utilizator</h2><p>Acces simplu cu username și parolă.</p></div><button type="button" onClick={() => setModal(null)}>×</button></div>
+            <div className="modal-head"><div><span className="modal-kicker">CONT NOU</span><h2>Adaugă utilizator</h2><p>Autentificare securizată prin cod PIN trimis pe e-mail.</p></div><button type="button" onClick={() => setModal(null)}>×</button></div>
             <div className="modal-body stacked-form">
               <label><span>Nume complet *</span><input name="name" required placeholder="Nume și prenume" /></label>
-              <label><span>Username *</span><input name="username" required autoComplete="off" placeholder="ex. andrei.m" /></label>
-              <label><span>Parolă temporară *</span><input name="password" required type="password" minLength={8} autoComplete="new-password" placeholder="Minimum 8 caractere" /><small>Utilizatorul o va schimba la prima autentificare.</small></label>
+              <label><span>Adresă de e-mail *</span><input name="email" required type="email" autoComplete="email" placeholder="nume@proconect.ro" /><small>Cloudflare Access va trimite codul PIN la această adresă.</small></label>
               <label><span>Rol *</span><select name="role"><option>Tehnician</option><option>Admin</option><option>Coordonator</option><option>Manager</option></select></label>
               <label><span>Contractor (opțional)</span><input name="contractor" list="contractor-options" /><small>Se folosește numai pentru rapoartele tehnicienilor.</small></label>
             </div>
