@@ -4,6 +4,7 @@ export type AppRole = "Admin" | "Manager" | "Coordonator" | "Tehnician";
 
 export type AuthenticatedAccount = {
   username: string;
+  email: string;
   name: string;
   role: AppRole;
   contractor: string;
@@ -22,6 +23,7 @@ type AuthEnvironment = {
 type StoredUser = {
   id: string;
   username: string;
+  email: string;
   name: string;
   role: AppRole;
   password_hash: string;
@@ -91,6 +93,7 @@ function equalConstantTime(first: string, second: string) {
 function toPublicAccount(user: StoredUser): AuthenticatedAccount {
   return {
     username: user.username,
+    email: user.email,
     name: user.name,
     role: user.role,
     contractor: "",
@@ -102,6 +105,7 @@ function toPublicAccount(user: StoredUser): AuthenticatedAccount {
 
 async function makeUserRow(input: {
   username: string;
+  email: string;
   name: string;
   role: AppRole;
   password: string;
@@ -116,6 +120,7 @@ async function makeUserRow(input: {
   return {
     id: crypto.randomUUID(),
     username: input.username.trim().toLowerCase(),
+    email: input.email.trim().toLowerCase(),
     name: input.name.trim(),
     role: input.role,
     passwordHash,
@@ -132,11 +137,12 @@ async function makeUserRow(input: {
 function insertUserStatement(user: Awaited<ReturnType<typeof makeUserRow>>) {
   return database()
     .prepare(
-      "INSERT INTO app_users (id, username, name, role, password_hash, password_salt, password_iterations, password_reset_required, active, jobs, failed_attempts, locked_until, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, 0, NULL, ?, ?)",
+      "INSERT INTO app_users (id, username, email, name, role, password_hash, password_salt, password_iterations, password_reset_required, active, jobs, failed_attempts, locked_until, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, 0, NULL, ?, ?)",
     )
     .bind(
       user.id,
       user.username,
+      user.email,
       user.name,
       user.role,
       user.passwordHash,
@@ -162,6 +168,7 @@ export async function ensureInitialAccounts() {
     missing.push(
       await makeUserRow({
         username: "vladimir.carlan",
+        email: "vladimir.carlan@proconect.ro",
         name: "Vladimir",
         role: "Admin",
         password: authEnvironment.PROCONECT_ADMIN_PASSWORD,
@@ -174,6 +181,7 @@ export async function ensureInitialAccounts() {
     missing.push(
       await makeUserRow({
         username: "vlad",
+        email: "vlad@proconect.ro",
         name: "Vlad",
         role: "Tehnician",
         password: authEnvironment.PROCONECT_TECHNICIAN_PASSWORD,
@@ -230,8 +238,8 @@ export async function currentSession(request: Request) {
       const accessEmail = access.email;
       const username = accessEmail.slice(0, accessEmail.indexOf("@"));
       const accessUser = await database()
-        .prepare("SELECT * FROM app_users WHERE username = ? AND active = 1 LIMIT 1")
-        .bind(username)
+        .prepare("SELECT * FROM app_users WHERE email = ? AND active = 1 LIMIT 1")
+        .bind(accessEmail)
         .first<StoredUser>();
       if (accessUser) {
         return {
@@ -331,11 +339,12 @@ export async function updatePassword(request: Request, password: string) {
 export async function listAccounts() {
   await ensureTechnicianContractorsTable();
   const result = await database()
-    .prepare("SELECT app_users.username, app_users.name, app_users.role, COALESCE(technician_contractors.contractor, '') AS contractor, app_users.active, app_users.jobs, app_users.password_reset_required FROM app_users LEFT JOIN technician_contractors ON technician_contractors.technician_username = app_users.username ORDER BY CASE WHEN app_users.role = 'Admin' THEN 0 ELSE 1 END, app_users.name")
-    .all<Pick<StoredUser, "username" | "name" | "role" | "active" | "jobs" | "password_reset_required"> & { contractor: string }>();
+    .prepare("SELECT app_users.username, app_users.email, app_users.name, app_users.role, COALESCE(technician_contractors.contractor, '') AS contractor, app_users.active, app_users.jobs, app_users.password_reset_required FROM app_users LEFT JOIN technician_contractors ON technician_contractors.technician_username = app_users.username ORDER BY CASE WHEN app_users.role = 'Admin' THEN 0 ELSE 1 END, app_users.name")
+    .all<Pick<StoredUser, "username" | "email" | "name" | "role" | "active" | "jobs" | "password_reset_required"> & { contractor: string }>();
 
   return (result.results ?? []).map((user) => ({
     username: user.username,
+    email: user.email,
     name: user.name,
     role: user.role,
     contractor: user.contractor ?? "",
@@ -345,21 +354,30 @@ export async function listAccounts() {
   }));
 }
 
-export async function addAccount(input: { username: string; name: string; role: AppRole; password: string; contractor?: string }) {
-  const username = input.username.trim().toLowerCase();
+export async function addAccount(input: { email: string; name: string; role: AppRole; contractor?: string }) {
+  const email = input.email.trim().toLowerCase();
+  if (!/^[^@\s]{1,64}@[^@\s]{1,190}$/.test(email)) {
+    return { error: "Introdu o adresă de e-mail validă.", status: 400 as const };
+  }
+  const username = email.slice(0, email.indexOf("@"));
   if (!/^[a-z0-9][a-z0-9._-]{1,63}$/.test(username)) {
-    return { error: "Username-ul trebuie să conțină între 2 și 64 de litere, cifre, punct, liniuță sau underscore.", status: 400 as const };
+    return { error: "Adresa de e-mail nu poate fi asociată unui utilizator valid.", status: 400 as const };
   }
   if (input.name.trim().length < 2) return { error: "Numele utilizatorului este obligatoriu.", status: 400 as const };
-  if (input.password.length < 8) return { error: "Parola temporară trebuie să aibă minimum 8 caractere.", status: 400 as const };
   if (!["Admin", "Manager", "Coordonator", "Tehnician"].includes(input.role)) {
     return { error: "Rolul selectat nu este valid.", status: 400 as const };
   }
 
-  const existing = await database().prepare("SELECT id FROM app_users WHERE username = ? LIMIT 1").bind(username).first();
-  if (existing) return { error: "Username-ul este deja folosit.", status: 409 as const };
+  const existing = await database().prepare("SELECT id FROM app_users WHERE username = ? OR email = ? LIMIT 1").bind(username, email).first();
+  if (existing) return { error: "Adresa de e-mail este deja asociată unui cont.", status: 409 as const };
 
-  const user = await makeUserRow({ ...input, username, passwordResetRequired: true });
+  const user = await makeUserRow({
+    ...input,
+    username,
+    email,
+    password: randomHex(32),
+    passwordResetRequired: false,
+  });
   await insertUserStatement(user).run();
   if (input.role === "Tehnician" && user.contractor) {
     await ensureTechnicianContractorsTable();
@@ -368,12 +386,13 @@ export async function addAccount(input: { username: string; name: string; role: 
   return {
     account: {
       username: user.username,
+      email: user.email,
       name: user.name,
       role: user.role,
       contractor: user.contractor,
       active: true,
       jobs: user.jobs,
-      passwordResetRequired: true,
+      passwordResetRequired: false,
     },
   };
 }
