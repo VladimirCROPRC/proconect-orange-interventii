@@ -371,8 +371,16 @@ export async function addAccount(input: { email: string; name: string; role: App
   const existing = await database().prepare("SELECT id FROM app_users WHERE username = ? OR email = ? LIMIT 1").bind(username, email).first();
   if (existing) return { error: "Adresa de e-mail este deja asociată unui cont.", status: 409 as const };
 
+  let contractor = input.role === "Tehnician" ? input.contractor?.trim() ?? "" : "";
+  if (contractor) {
+    const catalogContractor = await database().prepare("SELECT name FROM contractors WHERE lower(name) = lower(?) LIMIT 1").bind(contractor).first<{ name: string }>();
+    if (!catalogContractor) return { error: "Contractorul selectat nu există în catalog.", status: 400 as const };
+    contractor = catalogContractor.name;
+  }
+
   const user = await makeUserRow({
     ...input,
+    contractor,
     username,
     email,
     password: randomHex(32),
@@ -399,10 +407,15 @@ export async function addAccount(input: { email: string; name: string; role: App
 
 export async function updateAccountContractor(usernameInput: string, contractorInput: string) {
   const username = usernameInput.trim().toLowerCase();
-  const contractor = contractorInput.trim().slice(0, 160);
+  let contractor = contractorInput.trim().slice(0, 160);
   const account = await database().prepare("SELECT username, role FROM app_users WHERE username = ? LIMIT 1").bind(username).first<{ username: string; role: AppRole }>();
   if (!account) return { error: "Contul nu există.", status: 404 as const };
   if (account.role !== "Tehnician") return { error: "Contractorul poate fi asociat numai tehnicienilor.", status: 400 as const };
+  if (contractor) {
+    const catalogContractor = await database().prepare("SELECT name FROM contractors WHERE lower(name) = lower(?) LIMIT 1").bind(contractor).first<{ name: string }>();
+    if (!catalogContractor) return { error: "Contractorul selectat nu există în catalog.", status: 400 as const };
+    contractor = catalogContractor.name;
+  }
   await ensureTechnicianContractorsTable();
   await database().prepare("INSERT INTO technician_contractors (technician_username, contractor, updated_at) VALUES (?, ?, ?) ON CONFLICT(technician_username) DO UPDATE SET contractor = excluded.contractor, updated_at = excluded.updated_at").bind(username, contractor, Date.now()).run();
   return { username, contractor };
