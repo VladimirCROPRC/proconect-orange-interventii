@@ -231,7 +231,7 @@ export default function Home() {
 
     async function restoreSession() {
       try {
-        const response = await fetch("/api/auth", { cache: "no-store", credentials: "same-origin" });
+        const response = await fetch("/api/session", { cache: "no-store", credentials: "same-origin" });
         const payload = (await response.json()) as { account?: SignedInAccount | null; error?: string };
         if (!response.ok) throw new Error(payload.error || "Autentificarea nu este disponibilă momentan.");
         if (mounted && payload.account) setAuthenticatedAccount(payload.account);
@@ -513,7 +513,7 @@ export default function Home() {
     setAuthenticationError("");
 
     try {
-      const response = await fetch("/api/auth", {
+      const response = await fetch("/api/session", {
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
@@ -544,7 +544,7 @@ export default function Home() {
     setAuthenticationPending(true);
     setAuthenticationError("");
     try {
-      const response = await fetch("/api/auth", {
+      const response = await fetch("/api/session", {
         method: "PATCH",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
@@ -562,7 +562,7 @@ export default function Home() {
 
   async function handleSignOut() {
     try {
-      await fetch("/api/auth", { method: "DELETE", credentials: "same-origin" });
+      await fetch("/api/session", { method: "DELETE", credentials: "same-origin" });
     } finally {
       setAuthenticatedAccount(null);
       setProjectDataReady(false);
