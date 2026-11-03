@@ -1,3 +1,9 @@
+CREATE TABLE IF NOT EXISTS technician_contractors (
+  technician_username TEXT PRIMARY KEY,
+  contractor TEXT NOT NULL DEFAULT '',
+  updated_at INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS contractors (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL COLLATE NOCASE UNIQUE,
