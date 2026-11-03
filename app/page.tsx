@@ -1015,6 +1015,9 @@ export default function Home() {
       const payload = (await response.json()) as { account?: Account; error?: string };
       if (!response.ok || !payload.account) throw new Error(payload.error || "Contul nu a putut fi creat.");
       setAccounts((current) => [...current, payload.account!]);
+      if (payload.account.contractor) {
+        setContractors((current) => current.map((contractor) => contractor.name === payload.account!.contractor ? { ...contractor, users: contractor.users + 1 } : contractor));
+      }
       setModal(null);
       showToast(`Contul pentru ${email} a fost creat.`);
     } catch (error) {
@@ -1067,6 +1070,7 @@ export default function Home() {
   }
 
   async function saveTechnicianContractor(username: string, contractor: string) {
+    const previousContractor = accounts.find((account) => account.username === username)?.contractor ?? "";
     try {
       const response = await fetch("/api/accounts", {
         method: "PATCH",
@@ -1077,6 +1081,10 @@ export default function Home() {
       const payload = (await response.json()) as { contractor?: string; error?: string };
       if (!response.ok || payload.contractor === undefined) throw new Error(payload.error || "Contractorul nu a putut fi salvat.");
       setAccounts((current) => current.map((account) => account.username === username ? { ...account, contractor: payload.contractor! } : account));
+      setContractors((current) => current.map((item) => ({
+        ...item,
+        users: Math.max(0, item.users + (item.name === payload.contractor ? 1 : 0) - (item.name === previousContractor ? 1 : 0)),
+      })));
       showToast(payload.contractor ? `Contractorul ${payload.contractor} a fost asociat tehnicianului.` : "Asocierea cu contractorul a fost eliminată.");
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Contractorul nu a putut fi salvat.");
