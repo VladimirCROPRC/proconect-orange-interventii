@@ -7,7 +7,7 @@ ENV NODE_ENV=production \
     WRANGLER_WRITE_LOGS=false
 
 COPY package.json package-lock.json .npmrc ./
-RUN npm ci
+RUN npm ci --include=dev
 
 COPY . .
 RUN chmod +x scripts/*.sh \
