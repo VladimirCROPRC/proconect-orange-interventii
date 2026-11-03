@@ -25,10 +25,25 @@ jobs:
           file: Dockerfile
           push: false
           load: true
-          tags: proconect-orange-interventii:test
+          tags: proconect-orange-interventii:server
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: Validate Compose configuration
         run: |
           cp .dev.vars.example .dev.vars
           docker compose -f docker-compose.server.yml config --quiet
+      - name: Start and smoke-test application
+        run: |
+          mkdir -p ../data/database ../backups
+          docker compose -f docker-compose.server.yml up -d --no-build app
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:3010/api/session >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose -f docker-compose.server.yml logs app
+          exit 1
+      - name: Stop test containers
+        if: always()
+        run: docker compose -f docker-compose.server.yml down
