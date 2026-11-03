@@ -196,7 +196,24 @@ export async function ensureInitialAccounts() {
 
 export function sameOrigin(request: Request) {
   const origin = request.headers.get("origin");
-  return !origin || origin === new URL(request.url).origin;
+  if (!origin) return true;
+
+  try {
+    const originUrl = new URL(origin);
+    const requestUrl = new URL(request.url);
+    const candidateHosts = [
+      request.headers.get("x-forwarded-host"),
+      request.headers.get("host"),
+      requestUrl.host,
+    ]
+      .flatMap((value) => value?.split(",") ?? [])
+      .map((value) => value.trim().toLowerCase())
+      .filter(Boolean);
+
+    return candidateHosts.includes(originUrl.host.toLowerCase());
+  } catch {
+    return false;
+  }
 }
 
 function cookieValue(request: Request, name: string) {
