@@ -10,8 +10,8 @@ COPY package.json package-lock.json .npmrc ./
 RUN npm ci
 
 COPY . .
-RUN npm run build \
-    && chmod +x scripts/server-entrypoint.sh
+RUN chmod +x scripts/*.sh \
+    && npm run build
 
 EXPOSE 3000
 
