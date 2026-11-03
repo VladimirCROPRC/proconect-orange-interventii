@@ -16,6 +16,7 @@ type AuthEnvironment = {
   DB: D1Database;
   PROCONECT_ADMIN_PASSWORD?: string;
   PROCONECT_TECHNICIAN_PASSWORD?: string;
+  TRUST_CLOUDFLARE_ACCESS?: string;
 };
 
 type StoredUser = {
@@ -197,6 +198,25 @@ function sessionTokenFromRequest(request: Request) {
 }
 
 export async function currentSession(request: Request) {
+  if (authEnvironment.TRUST_CLOUDFLARE_ACCESS === "true") {
+    const accessEmail = request.headers.get("cf-access-authenticated-user-email")?.trim().toLowerCase() ?? "";
+    const accessAssertion = request.headers.get("cf-access-jwt-assertion")?.trim() ?? "";
+    if (/^[^@\s]{1,64}@[^@\s]{1,190}$/.test(accessEmail) && accessAssertion.split(".").length === 3) {
+      const username = accessEmail.slice(0, accessEmail.indexOf("@"));
+      const accessUser = await database()
+        .prepare("SELECT * FROM app_users WHERE username = ? AND active = 1 LIMIT 1")
+        .bind(username)
+        .first<StoredUser>();
+      if (accessUser) {
+        return {
+          account: { ...toPublicAccount(accessUser), passwordResetRequired: false },
+          sessionId: "",
+          userId: accessUser.id,
+        };
+      }
+    }
+  }
+
   const token = sessionTokenFromRequest(request);
   if (!token || !/^[a-f0-9]{64}$/.test(token)) return null;
 
