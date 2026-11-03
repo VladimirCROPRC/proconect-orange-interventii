@@ -20,12 +20,12 @@ export async function POST(request: Request) {
     if (!session || session.account.passwordResetRequired) return Response.json({ error: "Autentificare necesară." }, { status: 401 });
     if (session.account.role !== "Admin") return Response.json({ error: "Acces rezervat administratorului." }, { status: 403 });
 
-    const body = (await request.json()) as { username?: unknown; name?: unknown; role?: unknown; password?: unknown; contractor?: unknown };
-    if (typeof body.username !== "string" || typeof body.name !== "string" || typeof body.role !== "string" || typeof body.password !== "string") {
-      return Response.json({ error: "Completează toate câmpurile utilizatorului." }, { status: 400 });
+    const body = (await request.json()) as { email?: unknown; name?: unknown; role?: unknown; contractor?: unknown };
+    if (typeof body.email !== "string" || typeof body.name !== "string" || typeof body.role !== "string") {
+      return Response.json({ error: "Completează numele, adresa de e-mail și rolul utilizatorului." }, { status: 400 });
     }
 
-    const result = await addAccount({ username: body.username, name: body.name, role: body.role as AppRole, password: body.password, contractor: typeof body.contractor === "string" ? body.contractor : "" });
+    const result = await addAccount({ email: body.email, name: body.name, role: body.role as AppRole, contractor: typeof body.contractor === "string" ? body.contractor : "" });
     if ("error" in result) return Response.json({ error: result.error }, { status: result.status });
     return Response.json({ account: result.account }, { status: 201 });
   } catch {
