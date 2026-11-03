@@ -5,6 +5,7 @@ export const appUsers = sqliteTable(
   {
     id: text("id").primaryKey(),
     username: text("username").notNull(),
+    email: text("email").notNull().default(""),
     name: text("name").notNull(),
     role: text("role").notNull(),
     passwordHash: text("password_hash").notNull(),
@@ -18,7 +19,10 @@ export const appUsers = sqliteTable(
     createdAt: integer("created_at").notNull(),
     updatedAt: integer("updated_at").notNull(),
   },
-  (table) => [uniqueIndex("app_users_username_idx").on(table.username)],
+  (table) => [
+    uniqueIndex("app_users_username_idx").on(table.username),
+    uniqueIndex("app_users_email_idx").on(table.email),
+  ],
 );
 
 export const appSessions = sqliteTable(
