@@ -3,6 +3,7 @@ import { handleImageOptimization, DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } fr
 import handler from "vinext/server/app-router-entry";
 import { drainOneDrive, oneDriveConfigured } from "../app/onedrive-server";
 import { importOrangeMailTickets } from "../app/orange-mail-import";
+import { DELETE as deleteSession, GET as getSession, PATCH as patchSession, POST as postSession } from "../app/api/session/route";
 
 interface Env {
   ASSETS: Fetcher;
@@ -30,6 +31,14 @@ interface ExecutionContext {
 const worker = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
+
+    if (url.pathname === "/api/session") {
+      if (request.method === "GET") return getSession(request);
+      if (request.method === "POST") return postSession(request);
+      if (request.method === "PATCH") return patchSession(request);
+      if (request.method === "DELETE") return deleteSession(request);
+      return Response.json({ error: "Metodă neacceptată." }, { status: 405, headers: { Allow: "GET, POST, PATCH, DELETE" } });
+    }
 
     if (url.pathname === "/_vinext/image") {
       const allowedWidths = [...DEFAULT_DEVICE_SIZES, ...DEFAULT_IMAGE_SIZES];
