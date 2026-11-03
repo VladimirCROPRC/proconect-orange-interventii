@@ -72,12 +72,16 @@ test("Orange is the default and only activity in navigation", async () => {
 test("login uses the dedicated session route", async () => {
   const page = await source("app/page.tsx");
   const sessionRoute = await source("app/api/session/route.ts");
+  const worker = await source("worker/index.ts");
   assert.equal((page.match(/\/api\/session/g) ?? []).length, 4);
   assert.doesNotMatch(page, /\/api\/auth/);
   assert.match(sessionRoute, /export async function GET/);
   assert.match(sessionRoute, /export async function POST/);
   assert.match(sessionRoute, /signIn\(body\.username, body\.password\)/);
   assert.match(sessionRoute, /Set-Cookie/);
+  assert.match(worker, /url\.pathname === "\/api\/session"/);
+  assert.match(worker, /request\.method === "GET"\) return getSession\(request\)/);
+  assert.match(worker, /request\.method === "POST"\) return postSession\(request\)/);
 });
 
 test("OneDrive uses the existing Orange reports hierarchy", async () => {
