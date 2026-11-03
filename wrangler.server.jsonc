@@ -2,7 +2,7 @@
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "proconect-orange-interventii-server",
   "main": "dist/server/index.js",
-  "compatibility_date": "2026-08-04",
+  "compatibility_date": "2026-05-22",
   "compatibility_flags": ["nodejs_compat"],
   "assets": {
     "directory": "dist/client",
