@@ -1,0 +1,32 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "proconect-orange-interventii-server",
+  "main": "dist/server/index.js",
+  "compatibility_date": "2026-08-04",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "dist/client",
+    "binding": "ASSETS"
+  },
+  "vars": {
+    "PROCONECT_APP_URL": "https://orange-test.proconect.online"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "proconect-orange-interventii-db",
+      "database_id": "00000000-0000-0000-0000-000000000001",
+      "migrations_dir": "drizzle"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "BUCKET",
+      "bucket_name": "proconect-orange-interventii-files"
+    },
+    {
+      "binding": "proconect_orange_interventii_files",
+      "bucket_name": "proconect-orange-interventii-files"
+    }
+  ]
+}
