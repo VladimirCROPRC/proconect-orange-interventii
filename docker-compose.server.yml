@@ -1,0 +1,30 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: proconect-orange-interventii:server
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3010:3000"
+    volumes:
+      - ../data/database:/data/wrangler
+      - ../backups:/backups
+      - ./.dev.vars:/app/.dev.vars:ro
+    environment:
+      TZ: Europe/Bucharest
+    security_opt:
+      - no-new-privileges:true
+
+  scheduler:
+    image: proconect-orange-interventii:server
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    command: ["node", "scripts/server-scheduler.mjs"]
+    environment:
+      APP_INTERNAL_URL: http://app:3000
+      TZ: Europe/Bucharest
+    security_opt:
+      - no-new-privileges:true
