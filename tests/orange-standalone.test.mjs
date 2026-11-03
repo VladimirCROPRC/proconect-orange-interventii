@@ -69,6 +69,17 @@ test("Orange is the default and only activity in navigation", async () => {
   assert.doesNotMatch(navigation, /> Survey/);
 });
 
+test("login uses the dedicated session route", async () => {
+  const page = await source("app/page.tsx");
+  const sessionRoute = await source("app/api/session/route.ts");
+  assert.equal((page.match(/\/api\/session/g) ?? []).length, 4);
+  assert.doesNotMatch(page, /\/api\/auth/);
+  assert.match(sessionRoute, /export async function GET/);
+  assert.match(sessionRoute, /export async function POST/);
+  assert.match(sessionRoute, /signIn\(body\.username, body\.password\)/);
+  assert.match(sessionRoute, /Set-Cookie/);
+});
+
 test("OneDrive uses the existing Orange reports hierarchy", async () => {
   const oneDrive = await source("app/onedrive-server.ts");
   assert.match(oneDrive, /OROC \+ ORO/);
