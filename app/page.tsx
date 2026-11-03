@@ -89,6 +89,12 @@ type Account = {
   jobs: number;
 };
 
+type Contractor = {
+  id: string;
+  name: string;
+  users: number;
+};
+
 type SignedInAccount = Account & { passwordResetRequired: boolean };
 
 const initialAccounts: Account[] = [
@@ -194,6 +200,7 @@ export default function Home() {
   const [editingCpeRequiresGrounding, setEditingCpeRequiresGrounding] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
   const [accounts, setAccounts] = useState(initialAccounts);
+  const [contractors, setContractors] = useState<Contractor[]>([]);
   const [cpeList, setCpeList] = useState(initialCpeCatalog);
   const [cpeSearch, setCpeSearch] = useState("");
   const [search, setSearch] = useState("");
@@ -253,18 +260,26 @@ export default function Home() {
     if (authenticatedAccount?.role !== "Admin" || authenticatedAccount.passwordResetRequired) return;
 
     let mounted = true;
-    async function loadAccounts() {
+    async function loadTeamAdministration() {
       try {
-        const response = await fetch("/api/accounts", { cache: "no-store", credentials: "same-origin" });
-        if (!response.ok) return;
-        const payload = (await response.json()) as { accounts?: Account[] };
-        if (mounted && payload.accounts?.length) setAccounts(payload.accounts);
+        const [accountsResponse, contractorsResponse] = await Promise.all([
+          fetch("/api/accounts", { cache: "no-store", credentials: "same-origin" }),
+          fetch("/api/contractors", { cache: "no-store", credentials: "same-origin" }),
+        ]);
+        if (accountsResponse.ok) {
+          const payload = (await accountsResponse.json()) as { accounts?: Account[] };
+          if (mounted && payload.accounts) setAccounts(payload.accounts);
+        }
+        if (contractorsResponse.ok) {
+          const payload = (await contractorsResponse.json()) as { contractors?: Contractor[] };
+          if (mounted && payload.contractors) setContractors(payload.contractors);
+        }
       } catch {
-        // The authenticated session stays available if the account listing is temporarily unavailable.
+        // The authenticated session stays available if team administration is temporarily unavailable.
       }
     }
 
-    void loadAccounts();
+    void loadTeamAdministration();
     return () => {
       mounted = false;
     };
@@ -1007,6 +1022,50 @@ export default function Home() {
     }
   }
 
+  async function createContractor(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
+    const name = String(form.get("contractorName") || "").trim();
+    try {
+      const response = await fetch("/api/contractors", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      const payload = (await response.json()) as { contractor?: Contractor; error?: string };
+      if (!response.ok || !payload.contractor) throw new Error(payload.error || "Contractorul nu a putut fi creat.");
+      setContractors((current) => [...current, payload.contractor!].sort((first, second) => first.name.localeCompare(second.name, "ro")));
+      formElement.reset();
+      showToast(`Contractorul ${payload.contractor.name} a fost creat.`);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Contractorul nu a putut fi creat.");
+    }
+  }
+
+  async function deleteContractor(contractor: Contractor) {
+    if (contractor.users > 0) {
+      showToast("Contractorul este asociat unor tehnicieni. Elimină mai întâi asocierile.");
+      return;
+    }
+    if (!window.confirm(`Ștergi contractorul ${contractor.name}?`)) return;
+    try {
+      const response = await fetch("/api/contractors", {
+        method: "DELETE",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: contractor.id }),
+      });
+      const payload = (await response.json()) as { id?: string; error?: string };
+      if (!response.ok || !payload.id) throw new Error(payload.error || "Contractorul nu a putut fi șters.");
+      setContractors((current) => current.filter((item) => item.id !== payload.id));
+      showToast(`Contractorul ${contractor.name} a fost șters.`);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Contractorul nu a putut fi șters.");
+    }
+  }
+
   async function saveTechnicianContractor(username: string, contractor: string) {
     try {
       const response = await fetch("/api/accounts", {
@@ -1551,28 +1610,41 @@ export default function Home() {
           <div className="page-wrap inner-page">
             <section className="page-heading compact">
               <div><p className="eyebrow">ADMINISTRARE</p><h1>Echipă și conturi</h1><p>Creează conturi și gestionează accesul administratorilor și tehnicienilor.</p></div>
-              <button className="primary-button" onClick={() => setModal("account")}><span>＋</span> Cont nou</button>
+              {currentAccount.role === "Admin" && <button className="primary-button" onClick={() => setModal("account")}><span>＋</span> Cont nou</button>}
             </section>
             <section className="mini-metrics">
               <article><small>CONTURI ACTIVE</small><strong>{accounts.filter((a) => a.active).length}</strong></article>
               <article><small>TEHNICIENI</small><strong>{technicians.length}</strong></article>
-              <article><small>ADMINISTRATORI</small><strong>{accounts.filter((a) => a.role === "Admin").length}</strong></article>
+              <article><small>CONTRACTORI</small><strong>{contractors.length}</strong></article>
             </section>
             <section className="project-card team-card">
-              <div className="card-heading"><div><h2>Utilizatori</h2><p>Parolele sunt protejate și nu sunt afișate după creare.</p></div></div>
+              <div className="card-heading"><div><h2>Utilizatori</h2><p>Conturile folosesc autentificarea cu PIN trimis pe adresa de e-mail.</p></div></div>
               <div className="account-grid">
                 {accounts.map((account, index) => (
                   <article className="account-card" key={account.username}>
                     <div className={`avatar big ${index === 0 ? "avatar-green" : ""}`}>{initials(account.name)}</div>
-                    <div className="account-copy"><strong>{account.name}</strong><small>@{account.username}</small><span className={account.role === "Tehnician" ? "role" : "role role-dark"}>{account.role}</span></div>
+                    <div className="account-copy"><strong>{account.name}</strong><small>{account.email}</small><span className={account.role === "Tehnician" ? "role" : "role role-dark"}>{account.role}</span></div>
                     <div className="account-meta"><span><i className={account.active ? "online" : ""} />{account.active ? "Activ" : "Inactiv"}</span><small>{account.role === "Tehnician" ? `${account.jobs} lucrări` : "Acces complet"}</small></div>
-                    {account.role === "Tehnician" && <label className="account-contractor"><span>Contractor</span><input list="contractor-options" defaultValue={account.contractor} readOnly={authenticatedAccount?.role !== "Admin"} onBlur={(event) => { const value = event.currentTarget.value.trim(); if (value !== account.contractor) void saveTechnicianContractor(account.username, value); }} /></label>}
+                    {account.role === "Tehnician" && <label className="account-contractor"><span>Contractor</span><select value={account.contractor} disabled={authenticatedAccount?.role !== "Admin"} onChange={(event) => void saveTechnicianContractor(account.username, event.currentTarget.value)}><option value="">Fără contractor</option>{contractors.map((contractor) => <option key={contractor.id} value={contractor.name}>{contractor.name}</option>)}</select></label>}
                     <button className="more" aria-label={`Opțiuni cont ${account.username}`}>•••</button>
                   </article>
                 ))}
               </div>
-              <datalist id="contractor-options">{Array.from(new Set(accounts.map((account) => account.contractor).filter(Boolean))).map((contractor) => <option key={contractor} value={contractor} />)}</datalist>
             </section>
+            {currentAccount.role === "Admin" && <section className="project-card contractor-admin-card">
+              <div className="card-heading"><div><h2>Administrare contractori</h2><p>Creează contractorii disponibili în formularul de cont și în asocierea tehnicienilor.</p></div></div>
+              <form className="contractor-create-form" onSubmit={createContractor}>
+                <label><span>Denumire contractor</span><input name="contractorName" required minLength={2} maxLength={160} placeholder="ex. Proconect" /></label>
+                <button className="primary-button" type="submit"><span>＋</span> Adaugă contractor</button>
+              </form>
+              <div className="contractor-list">
+                {!contractors.length && <div className="contractor-empty"><strong>Nu există contractori</strong><p>Adaugă primul contractor pentru a-l putea selecta la crearea unui cont.</p></div>}
+                {contractors.map((contractor) => <article className="contractor-row" key={contractor.id}>
+                  <div><strong>{contractor.name}</strong><small>{contractor.users === 1 ? "1 tehnician asociat" : `${contractor.users} tehnicieni asociați`}</small></div>
+                  <button type="button" className="secondary-button danger-button" disabled={contractor.users > 0} title={contractor.users > 0 ? "Elimină mai întâi asocierile cu tehnicienii." : `Șterge ${contractor.name}`} onClick={() => void deleteContractor(contractor)}>Șterge</button>
+                </article>)}
+              </div>
+            </section>}
           </div>
         )}
 
@@ -1878,7 +1950,7 @@ export default function Home() {
               <label><span>Nume complet *</span><input name="name" required placeholder="Nume și prenume" /></label>
               <label><span>Adresă de e-mail *</span><input name="email" required type="email" autoComplete="email" placeholder="nume@proconect.ro" /><small>Cloudflare Access va trimite codul PIN la această adresă.</small></label>
               <label><span>Rol *</span><select name="role"><option>Tehnician</option><option>Admin</option><option>Coordonator</option><option>Manager</option></select></label>
-              <label><span>Contractor (opțional)</span><input name="contractor" list="contractor-options" /><small>Se folosește numai pentru rapoartele tehnicienilor.</small></label>
+              <label><span>Contractor (opțional)</span><select name="contractor" defaultValue=""><option value="">Fără contractor</option>{contractors.map((contractor) => <option key={contractor.id} value={contractor.name}>{contractor.name}</option>)}</select><small>Lista se administrează din secțiunea Echipă.</small></label>
             </div>
             <div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setModal(null)}>Anulează</button><button className="primary-button" type="submit">Creează contul</button></div>
           </form>
