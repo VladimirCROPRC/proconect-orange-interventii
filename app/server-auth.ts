@@ -191,17 +191,43 @@ export function sameOrigin(request: Request) {
   return !origin || origin === new URL(request.url).origin;
 }
 
-function sessionTokenFromRequest(request: Request) {
+function cookieValue(request: Request, name: string) {
   const cookie = request.headers.get("cookie") ?? "";
-  const entry = cookie.split(";").map((part) => part.trim()).find((part) => part.startsWith(`${SESSION_COOKIE_NAME}=`));
-  return entry?.slice(SESSION_COOKIE_NAME.length + 1) || null;
+  const prefix = `${name}=`;
+  const entry = cookie.split(";").map((part) => part.trim()).find((part) => part.startsWith(prefix));
+  return entry?.slice(prefix.length) || null;
+}
+
+function sessionTokenFromRequest(request: Request) {
+  return cookieValue(request, SESSION_COOKIE_NAME);
+}
+
+function accessIdentity(request: Request) {
+  const token = request.headers.get("cf-access-jwt-assertion")?.trim()
+    || cookieValue(request, "CF_Authorization")
+    || "";
+  if (token.split(".").length !== 3) return null;
+
+  let email = request.headers.get("cf-access-authenticated-user-email")?.trim().toLowerCase() ?? "";
+  if (!email) {
+    try {
+      const encodedPayload = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+      const paddedPayload = encodedPayload.padEnd(Math.ceil(encodedPayload.length / 4) * 4, "=");
+      const payload = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(paddedPayload), (character) => character.charCodeAt(0)))) as { email?: unknown };
+      email = typeof payload.email === "string" ? payload.email.trim().toLowerCase() : "";
+    } catch {
+      return null;
+    }
+  }
+
+  return /^[^@\s]{1,64}@[^@\s]{1,190}$/.test(email) ? { email, token } : null;
 }
 
 export async function currentSession(request: Request) {
   if (authEnvironment.TRUST_CLOUDFLARE_ACCESS === "true") {
-    const accessEmail = request.headers.get("cf-access-authenticated-user-email")?.trim().toLowerCase() ?? "";
-    const accessAssertion = request.headers.get("cf-access-jwt-assertion")?.trim() ?? "";
-    if (/^[^@\s]{1,64}@[^@\s]{1,190}$/.test(accessEmail) && accessAssertion.split(".").length === 3) {
+    const access = accessIdentity(request);
+    if (access) {
+      const accessEmail = access.email;
       const username = accessEmail.slice(0, accessEmail.indexOf("@"));
       const accessUser = await database()
         .prepare("SELECT * FROM app_users WHERE username = ? AND active = 1 LIMIT 1")
