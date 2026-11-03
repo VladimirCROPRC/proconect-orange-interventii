@@ -11,6 +11,12 @@
 	"observability": {
 		"enabled": true
 	},
+	"routes": [
+		{
+			"pattern": "orange.proconect.online/*",
+			"zone_name": "proconect.online"
+		}
+	],
 	"triggers": {
 		"crons": ["* * * * *"]
 	},
