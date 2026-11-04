@@ -9,7 +9,7 @@
     "binding": "ASSETS"
   },
   "vars": {
-    "PROCONECT_APP_URL": "https://orange-test.proconect.online",
+    "PROCONECT_APP_URL": "https://orange.proconect.online",
     "TRUST_CLOUDFLARE_ACCESS": "true"
   },
   "d1_databases": [
